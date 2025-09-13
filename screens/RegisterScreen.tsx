@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
-import ProfileSelector from '../components/ProfileSelector';
-import type { UserProfile } from '../types';
+import { useAuth } from '@/context/AuthContext';
+import ProfileSelector from '@/components/ProfileSelector';
+import type { UserProfile } from '@/types';
 
 interface RegisterScreenProps {
     onToggleView: () => void;
@@ -37,8 +37,16 @@ export default function RegisterScreen({ onToggleView }: RegisterScreenProps): R
         }
     };
     
+    const handleProfileSelection = (profileData: UserProfile, age?: number) => {
+        const finalProfile: UserProfile = { ...profileData };
+        if (age !== undefined) {
+            finalProfile.age = age;
+        }
+        setProfile(finalProfile);
+    };
+
     if (!profile) {
-        return <ProfileSelector onProfileSelect={(p, age) => setProfile({ ...p, age })} />;
+        return <ProfileSelector onProfileSelect={handleProfileSelection} />;
     }
 
     return (
@@ -52,15 +60,15 @@ export default function RegisterScreen({ onToggleView }: RegisterScreenProps): R
             <form onSubmit={handleRegister} className="space-y-4">
                  <div>
                     <label className="block text-sm font-medium text-gray-700">Correu Electrònic</label>
-                    <input type="email" value={email} onChange={e => setEmail(e.target.value)} required className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-brand-primary focus:border-brand-primary" />
+                    <input type="email" value={email} onChange={e => setEmail(e.target.value)} required autoComplete="email" className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-brand-primary focus:border-brand-primary" />
                 </div>
                  <div>
                     <label className="block text-sm font-medium text-gray-700">Contrasenya</label>
-                    <input type="password" value={password} onChange={e => setPassword(e.target.value)} required className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-brand-primary focus:border-brand-primary" />
+                    <input type="password" value={password} onChange={e => setPassword(e.target.value)} required autoComplete="new-password" className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-brand-primary focus:border-brand-primary" />
                 </div>
                  <div>
                     <label className="block text-sm font-medium text-gray-700">Confirma la contrasenya</label>
-                    <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-brand-primary focus:border-brand-primary" />
+                    <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required autoComplete="new-password" className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-brand-primary focus:border-brand-primary" />
                 </div>
                  <button type="submit" disabled={loading} className="w-full bg-brand-primary text-white font-bold py-3 px-4 rounded-lg mt-4 hover:bg-blue-600 transition-colors disabled:bg-gray-400">
                     {loading ? 'Registrant...' : 'Registra\'t'}

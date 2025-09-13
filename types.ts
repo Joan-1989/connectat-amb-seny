@@ -1,3 +1,4 @@
+// --- Tipus Generals ---
 export enum ProfileType {
   Jove = "Jove",
   Tutor = "Mare/Pare/tutor/a",
@@ -17,6 +18,7 @@ export interface User {
 
 export type ActiveModule = "Informa't" | "Entrena't" | "Activa't" | "Perfil";
 
+// --- Mòdul Informa't ---
 export interface Article {
   id: string;
   titol: string;
@@ -32,15 +34,6 @@ export interface QuizQuestion {
   resposta_correcta: string;
 }
 
-export type BadgeId = 'detox-bronze' | 'first-diary' | 'myth-buster';
-
-export interface Badge {
-  id: BadgeId;
-  name: string;
-  description: string;
-  icon: string; // Emoji or identifier for an icon component
-}
-
 export interface Myth {
   id: string;
   statement: string;
@@ -48,6 +41,17 @@ export interface Myth {
   explanation: string;
 }
 
+// --- Gamificació ---
+export type BadgeId = 'detox-bronze' | 'first-diary' | 'myth-buster' | 'wellbeing-plan-created' | 'first-rudder-entry';
+
+export interface Badge {
+  id: BadgeId;
+  name: string;
+  description: string;
+  icon: string;
+}
+
+// --- Mòdul Entrena't (Eines Noves) ---
 export type Mood = 'Feliç' | 'Trist' | 'Enfadat' | 'Ansiós' | 'Relaxat' | 'Normal';
 
 export interface MoodEntry {
@@ -56,6 +60,22 @@ export interface MoodEntry {
   mood: Mood;
 }
 
+export interface WellbeingPlan {
+    answers: string[];
+    consejos: string[];
+    reptes: string[];
+    createdAt: string;
+}
+
+export type RecoveryDomain = "esperanca" | "connexio" | "identitat" | "sentit" | "apoderament" | "benestar" | "vida_social" | "inclusio";
+
+export interface RecoveryRudderEntry {
+    date: string;
+    scores: Record<RecoveryDomain, number>;
+}
+
+
+// --- Mòdul Entrena't (Habilitats Socials) ---
 export interface ChatScenario {
   id: string;
   title: string;
@@ -70,10 +90,12 @@ export interface ChatMessage {
   parts: { text: string }[];
 }
 
-// FIX: Add global type definitions for Vite's `import.meta.env` to resolve TypeScript errors.
+
+// --- Variables d'entorn de Vite ---
 declare global {
   interface ImportMeta {
     readonly env: {
+      readonly VITE_GEMINI_API_KEY: string;
       readonly VITE_FIREBASE_API_KEY: string;
       readonly VITE_FIREBASE_AUTH_DOMAIN: string;
       readonly VITE_FIREBASE_PROJECT_ID: string;
@@ -83,3 +105,4 @@ declare global {
     };
   }
 }
+

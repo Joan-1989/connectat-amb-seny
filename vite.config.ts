@@ -1,19 +1,20 @@
+import { defineConfig } from 'vite';
 import path from 'path';
-import { defineConfig, loadEnv } from 'vite';
 
-export default defineConfig(({ mode }) => {
-    const env = loadEnv(mode, '.', '');
-    return {
-      define: {
-        // Corregeix el nom de la variable d'entorn a VITE_GEMINI_API_KEY
-        'process.env.API_KEY': JSON.stringify(env.VITE_GEMINI_API_KEY)
-      },
-      resolve: {
-        alias: {
-          '@': path.resolve(__dirname, '.'),
-        }
-      }
-    };
+// https://vitejs.dev/config/
+export default defineConfig({
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './'),
+    },
+  },
+  build: {
+    rollupOptions: {
+      // INDIQUEM A VITE QUE NO INCLOGUI AQUEST PAQUET:
+      // Com que l'hem afegit a l'importmap de l'index.html, el navegador
+      // ja sap d'on descarregar-lo. Això soluciona el conflicte.
+      external: ['@google/genai'],
+    },
+  },
 });
-
 

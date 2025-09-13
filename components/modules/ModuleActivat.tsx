@@ -31,37 +31,44 @@ const HelpModal: React.FC<{ onClose: () => void }> = ({ onClose }) => (
     </div>
 );
 
-const FamilyEducatorSpace = () => {
+const FamilyEducatorSpace: React.FC = () => {
     const [starters, setStarters] = useState<string[]>([]);
     const [loading, setLoading] = useState(false);
     const [topic, setTopic] = useState<string>('seguretat online');
+    const [error, setError] = useState<string | null>(null);
     
     const resources = {
         "Guies": [
-            { title: "Guia sobre Ciberassetjament per a Pares", description: "Com detectar i actuar davant l'assetjament en línia.", url: "#" },
+            { title: "Guia sobre Ciberassetjament (Internet Segura)", description: "Com detectar i actuar davant l'assetjament en línia.", url: "https://www.internetsegura.cat/ciberassetjament/" },
         ],
         "Tutorials": [
-             { title: "Configurar Controls Parentals a iOS", description: "Pas a pas per a una configuració efectiva.", url: "#" },
+             { title: "Configurar Controls Parentals a iOS", description: "Pas a pas per a una configuració efectiva.", url: "https://support.apple.com/ca-es/HT201304" },
         ],
         "Activitats": [
-            { title: "Idees per a una Tarda Sense Pantalles", description: "Fomenta la connexió familiar offline.", url: "#" },
+            { title: "10 coses per fer en família", description: "Fomenta la connexió familiar offline.", url: "https://faros.hsjdbcn.org/ca/articulo/10-coses-fer-familia-idees-desconnectar-pantalles-divertir-se" },
         ]
     };
 
-    const forumChannels = ["#PrimersMòbils", "#Videojocs", "#Ciberassetjament", "#SalutMental"];
-
     const handleGenerate = async () => {
         setLoading(true);
-        const generatedStarters = await generateConversationStarters(topic);
-        setStarters(generatedStarters);
-        setLoading(false);
+        setError(null);
+        try {
+            const generatedStarters = await generateConversationStarters(topic);
+            if (generatedStarters.length === 0) {
+                setError("No s'han pogut generar idees. Intenta-ho de nou més tard.");
+            }
+            setStarters(generatedStarters);
+        } catch (err) {
+            setError("Hi ha hagut un error en contactar amb la IA.");
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
         <div className="bg-white p-6 rounded-lg shadow-md mt-8 space-y-8">
             <h3 className="text-xl font-bold text-brand-dark -mb-4">Espai per a Famílies i Educadors</h3>
             
-            {/* Conversation Starters */}
             <section>
                 <h4 className="font-bold text-lg mb-2 text-brand-primary">Iniciadors de Conversa</h4>
                 <p className="mb-4 text-sm text-gray-600">Genera idees per iniciar converses importants amb els joves.</p>
@@ -77,7 +84,7 @@ const FamilyEducatorSpace = () => {
                 <button onClick={handleGenerate} disabled={loading} className="w-full bg-brand-accent text-white font-bold py-2 px-4 rounded-lg disabled:bg-gray-400">
                     {loading ? 'Generant...' : 'Genera Idees'}
                 </button>
-
+                {error && <p className="mt-4 text-sm text-red-600 bg-red-100 p-3 rounded-md">{error}</p>}
                 {starters.length > 0 && (
                     <div className="mt-6 bg-amber-50 p-3 rounded-lg">
                         <h5 className="font-bold mb-2">Aquí tens algunes idees:</h5>
@@ -88,7 +95,6 @@ const FamilyEducatorSpace = () => {
                 )}
             </section>
 
-            {/* Resource Library */}
             <section>
                 <h4 className="font-bold text-lg mb-2 text-brand-primary">Biblioteca de Recursos</h4>
                 <div className="space-y-4">
@@ -105,21 +111,9 @@ const FamilyEducatorSpace = () => {
                     ))}
                 </div>
             </section>
-            
-            {/* Forum Placeholder */}
-            <section>
-                <h4 className="font-bold text-lg mb-2 text-brand-primary">Fòrum de Discussió (Properament)</h4>
-                 <p className="mb-4 text-sm text-gray-600">Un espai per compartir experiències i resoldre dubtes amb altres famílies i educadors.</p>
-                 <div className="flex flex-wrap gap-2">
-                    {forumChannels.map(channel => (
-                        <span key={channel} className="bg-blue-100 text-blue-800 text-sm font-medium px-2.5 py-0.5 rounded-full">{channel}</span>
-                    ))}
-                 </div>
-            </section>
         </div>
     );
 };
-
 
 export default function ModuleActivat({ profile }: ModuleActivatProps): React.ReactElement {
   const [showHelpModal, setShowHelpModal] = useState(false);
@@ -142,3 +136,4 @@ export default function ModuleActivat({ profile }: ModuleActivatProps): React.Re
     </div>
   );
 }
+
