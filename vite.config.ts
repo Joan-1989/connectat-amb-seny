@@ -1,7 +1,6 @@
 import { defineConfig } from 'vite';
 import path from 'path';
 
-// https://vitejs.dev/config/
 export default defineConfig({
   resolve: {
     alias: {
@@ -9,12 +8,15 @@ export default defineConfig({
     },
   },
   build: {
+    outDir: 'dist',
+    sourcemap: true,
+    // IMPORTANT: no excloem l’SDK de Gemini del bundle
     rollupOptions: {
-      // INDIQUEM A VITE QUE NO INCLOGUI AQUEST PAQUET:
-      // Com que l'hem afegit a l'importmap de l'index.html, el navegador
-      // ja sap d'on descarregar-lo. Això soluciona el conflicte.
-      external: ['@google/genai'],
-    },
+      // No 'external' per @google/generative-ai
+    }
   },
+  // (opcional) per tenir variables en codi si en vols afegir via define
+  // define: {
+  //   __APP_VERSION__: JSON.stringify('1.0.0'),
+  // },
 });
-

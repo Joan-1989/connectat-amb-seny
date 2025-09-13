@@ -1,82 +1,29 @@
-// --- Tipus Generals ---
-export enum ProfileType {
-  Jove = "Jove",
-  Tutor = "Mare/Pare/tutor/a",
-  Professional = "Professional/Educador/a",
+// types.ts — versió unificada i compatible amb el projecte
+
+/* ====== Missatgeria (Gemini) ====== */
+export type Role = 'user' | 'model';
+
+export interface ChatPart {
+  text: string;
 }
 
-export interface UserProfile {
-  type: ProfileType;
-  age?: number;
+export interface ChatMessage {
+  id?: string;
+  role: Role;
+  parts: ChatPart[];
+  userId?: string;
+  // Mantingut com 'any' per compat amb definicions anteriors
+  timestamp?: any;
 }
 
-export interface User {
-  uid: string;
-  email: string;
-  profile: UserProfile;
-}
-
-export type ActiveModule = "Informa't" | "Entrena't" | "Activa't" | "Perfil";
-
-// --- Mòdul Informa't ---
-export interface Article {
-  id: string;
-  titol: string;
-  contingut: string;
-  categoria: string;
-  tipus_media: 'imatge' | 'video';
-  url_media: string;
-}
-
+/* ====== Quiz / Escenaris de xat ====== */
 export interface QuizQuestion {
   pregunta: string;
   opcions: string[];
   resposta_correcta: string;
 }
 
-export interface Myth {
-  id: string;
-  statement: string;
-  isMyth: boolean;
-  explanation: string;
-}
-
-// --- Gamificació ---
-export type BadgeId = 'detox-bronze' | 'first-diary' | 'myth-buster' | 'wellbeing-plan-created' | 'first-rudder-entry';
-
-export interface Badge {
-  id: BadgeId;
-  name: string;
-  description: string;
-  icon: string;
-}
-
-// --- Mòdul Entrena't (Eines Noves) ---
-export type Mood = 'Feliç' | 'Trist' | 'Enfadat' | 'Ansiós' | 'Relaxat' | 'Normal';
-
-export interface MoodEntry {
-  date: string;
-  text: string;
-  mood: Mood;
-}
-
-export interface WellbeingPlan {
-    answers: string[];
-    consejos: string[];
-    reptes: string[];
-    createdAt: string;
-}
-
-export type RecoveryDomain = "esperanca" | "connexio" | "identitat" | "sentit" | "apoderament" | "benestar" | "vida_social" | "inclusio";
-
-export interface RecoveryRudderEntry {
-    date: string;
-    scores: Record<RecoveryDomain, number>;
-}
-
-
-// --- Mòdul Entrena't (Habilitats Socials) ---
-export interface ChatScenario { // <--- Nom corregit (abans era Scenario)
+export interface ChatScenario {
   id: string;
   title: string;
   description: string;
@@ -85,26 +32,80 @@ export interface ChatScenario { // <--- Nom corregit (abans era Scenario)
   initialMessage: string;
 }
 
-export interface ChatMessage {
-  id?: string; // ID del document de Firestore (opcional)
-  role: 'user' | 'model';
-  parts: { text: string }[];
-  userId?: string; // <-- AFEGIM AQUESTA PROPIETAT per identificar qui envia el missatge
-  timestamp?: any; // Per a ordenar per data des de Firestore
+/* ====== Activitats: Cartes d’Emocions ====== */
+export interface EmotionScenario {
+  id: string;
+  text: string;              // Escenari / situació
+  correctStrategyId: string; // ID de l’estratègia correcta
 }
 
-// --- Variables d'entorn de Vite ---
-declare global {
-  interface ImportMeta {
-    readonly env: {
-      readonly VITE_GEMINI_API_KEY: string;
-      readonly VITE_FIREBASE_API_KEY: string;
-      readonly VITE_FIREBASE_AUTH_DOMAIN: string;
-      readonly VITE_FIREBASE_PROJECT_ID: string;
-      readonly VITE_FIREBASE_STORAGE_BUCKET: string;
-      readonly VITE_FIREBASE_MESSAGING_SENDER_ID: string;
-      readonly VITE_FIREBASE_APP_ID: string;
-    };
-  }
+export interface StrategyBin {
+  id: string;
+  title: string;
+  description: string;
 }
 
+export interface EmotionCardResult {
+  scenarioId: string;
+  droppedIn: string; // bin id
+  correct: boolean;
+}
+
+/* ====== Activitats: Roleplay ====== */
+export interface RoleplayState {
+  topic: string;
+  // Historial de conversa; NOMÉS 'user' | 'model'
+  context: ChatMessage[];
+}
+
+export interface RoleplayOption {
+  id: string;
+  label: string;
+}
+
+export interface RoleplayStep {
+  npcSay: string;
+  options: RoleplayOption[];
+}
+
+/* ====== Activitats: Dilemes Socials ====== */
+export interface SocialDilemma {
+  id: string;
+  prompt: string;
+  options: { id: string; label: string }[];
+}
+
+/* ====== Activitats: Diari de Reflexió ====== */
+export interface JournalFeedback {
+  strengths: string[];
+  suggestions: string[];
+  summary: string;
+}
+
+/* ====== Gamificació / Perfil ====== */
+export type ProfileType =
+  | 'adolescent'
+  | 'pare'
+  | 'docent'
+  | 'Adolescent'
+  | 'Tutor'
+  | 'Professional';
+
+
+export interface UserProfile {
+  uid?: string;
+  email?: string;
+  displayName?: string;
+  photoURL?: string;
+  type: ProfileType;
+  age?: number;
+}
+export type ActiveModule = "Informa't" | "Entrena't" | "Activa't" | "Perfil";
+
+
+export interface Badge {
+  id: string;
+  name: string;
+  description: string;
+  icon: string; // emoji o ruta d’imatge
+}

@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { ProfileType } from '../../types';
-import type { UserProfile } from '../../types';
+import type { ProfileType } from '../../types';
 import { generateConversationStarters } from '../../services/geminiService';
 
 interface ModuleActivatProps {
@@ -117,7 +116,7 @@ const FamilyEducatorSpace: React.FC = () => {
 
 export default function ModuleActivat({ profile }: ModuleActivatProps): React.ReactElement {
   const [showHelpModal, setShowHelpModal] = useState(false);
-  const isAdultProfile = profile?.type === ProfileType.Tutor || profile?.type === ProfileType.Professional;
+  const isAdultProfile = profile?.type === 'Tutor' || profile?.type === 'Professional';
 
   return (
     <div className="animate-fade-in">

@@ -1,19 +1,16 @@
-// components/skills/InteractiveChat.tsx
-
 import React, { useState, useEffect, useRef } from 'react';
 import { sendMessage, onMessagesSnapshot } from '../../services/firestoreService';
 import { generateChatResponse } from '../../services/geminiService';
-// 👇 CORRECCIÓ 1: Importem ChatScenario en lloc de Scenario
 import type { ChatMessage, ChatScenario } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 
 interface InteractiveChatProps {
-  scenario: ChatScenario; // <--- Tipus de prop corregit
+  scenario: ChatScenario;
+  onBack: () => void; // Callback per tornar enrere
 }
 
-export default function InteractiveChat({ scenario }: InteractiveChatProps) {
-  // 👇 CORRECCIÓ 2: Obtenim 'currentUser' i el renombrem a 'user' per a la resta del component
-  const { currentUser: user } = useAuth(); 
+export default function InteractiveChat({ scenario, onBack }: InteractiveChatProps) {
+  const { currentUser: user } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [userInput, setUserInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -26,14 +23,13 @@ export default function InteractiveChat({ scenario }: InteractiveChatProps) {
 
   useEffect(() => {
     if (!user) return;
-    
+
     const unsubscribe = onMessagesSnapshot(chatId, (newMessages) => {
-      // Afegim el missatge inicial si el xat està buit
       if (newMessages.length === 0) {
         const initialMessage: Omit<ChatMessage, 'id' | 'timestamp'> = {
-            role: 'model',
-            parts: [{ text: scenario.initialMessage }],
-            userId: 'bot',
+          role: 'model',
+          parts: [{ text: scenario.initialMessage }],
+          userId: 'bot',
         };
         sendMessage(chatId, initialMessage);
       }
@@ -46,7 +42,6 @@ export default function InteractiveChat({ scenario }: InteractiveChatProps) {
   const handleSendMessage = async () => {
     if (!userInput.trim() || !user) return;
 
-    // 👇 CORRECCIÓ 3: userMessage ara inclou userId, que ja és vàlid al tipus ChatMessage
     const userMessage: Omit<ChatMessage, 'id' | 'timestamp'> = {
       role: 'user',
       parts: [{ text: userInput }],
@@ -58,10 +53,17 @@ export default function InteractiveChat({ scenario }: InteractiveChatProps) {
     setIsLoading(true);
 
     try {
-      // 👇 CORRECCIÓ 4: Passem el userMessage ja creat (i tipat) per a mantenir la consistència
-      const history = [...messages, userMessage]; 
-      const botResponseText = await generateChatResponse(history, userInput, scenario.systemInstruction);
-      
+      const filteredHistory = [...messages, userMessage];
+      while (filteredHistory.length && filteredHistory[0].role !== 'user') {
+        filteredHistory.shift();
+      }
+
+      const botResponseText = await generateChatResponse(
+        filteredHistory,
+        userInput,
+        scenario.systemInstruction
+      );
+
       const botMessage: Omit<ChatMessage, 'id' | 'timestamp'> = {
         role: 'model',
         parts: [{ text: botResponseText }],
@@ -69,7 +71,7 @@ export default function InteractiveChat({ scenario }: InteractiveChatProps) {
       };
       await sendMessage(chatId, botMessage);
     } catch (error) {
-      console.error("Error en la resposta de l'assistent:", error);
+      console.error('Error en la resposta de l’assistent:', error);
     } finally {
       setIsLoading(false);
     }
@@ -77,11 +79,22 @@ export default function InteractiveChat({ scenario }: InteractiveChatProps) {
 
   return (
     <div className="flex flex-col h-full bg-gray-50 p-4 rounded-lg shadow-inner">
-      <h4 className="text-lg font-semibold mb-2">{scenario.title}</h4>
+      {/* 🔹 Header amb botó enrere */}
+      <div className="flex items-center justify-between mb-4">
+        <h4 className="text-lg font-semibold">{scenario.title}</h4>
+        <button
+          onClick={onBack}
+          className="text-sm px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 transition-colors"
+        >
+          ⬅️ Enrere
+        </button>
+      </div>
+
       <p className="text-sm text-gray-600 mb-4">{scenario.description}</p>
+
+      {/* Missatges */}
       <div className="flex-grow overflow-y-auto space-y-3 pr-2">
         {messages.map((msg, index) => (
-          // 👇 CORRECCIÓ 5: Ara podem comparar msg.userId amb l'uid de l'usuari
           <div
             key={msg.id || index}
             className={`flex ${msg.userId === user?.uid ? 'justify-end' : 'justify-start'}`}
@@ -99,6 +112,8 @@ export default function InteractiveChat({ scenario }: InteractiveChatProps) {
         ))}
         <div ref={chatEndRef} />
       </div>
+
+      {/* Input */}
       <div className="mt-4 flex">
         <input
           type="text"
@@ -115,6 +130,16 @@ export default function InteractiveChat({ scenario }: InteractiveChatProps) {
           className="bg-brand-primary text-white font-bold py-2 px-6 rounded-r-full hover:bg-brand-secondary disabled:bg-gray-400 transition-colors"
         >
           {isLoading ? '...' : 'Enviar'}
+        </button>
+      </div>
+
+      {/* 🔹 Botó enrere fixat al peu */}
+      <div className="mt-4 flex justify-center">
+        <button
+          onClick={onBack}
+          className="text-sm px-4 py-2 rounded bg-gray-200 hover:bg-gray-300 transition-colors"
+        >
+          ⬅️ Tornar a escenaris
         </button>
       </div>
     </div>
