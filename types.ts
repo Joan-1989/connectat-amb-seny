@@ -76,7 +76,7 @@ export interface RecoveryRudderEntry {
 
 
 // --- Mòdul Entrena't (Habilitats Socials) ---
-export interface ChatScenario {
+export interface ChatScenario { // <--- Nom corregit (abans era Scenario)
   id: string;
   title: string;
   description: string;
@@ -86,10 +86,12 @@ export interface ChatScenario {
 }
 
 export interface ChatMessage {
+  id?: string; // ID del document de Firestore (opcional)
   role: 'user' | 'model';
   parts: { text: string }[];
+  userId?: string; // <-- AFEGIM AQUESTA PROPIETAT per identificar qui envia el missatge
+  timestamp?: any; // Per a ordenar per data des de Firestore
 }
-
 
 // --- Variables d'entorn de Vite ---
 declare global {

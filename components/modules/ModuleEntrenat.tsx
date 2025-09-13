@@ -1,3 +1,5 @@
+// components/modules/ModuleEntrenat.tsx
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useGamification } from '../../context/GamificationContext';
 import { useAuth } from '../../context/AuthContext';
@@ -7,7 +9,12 @@ import { generateWellbeingPlan } from '../../services/geminiService';
 import { db } from '../../services/firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 
+// ***** NOU IMPORT *****
+import GeminiAssistant from '../skills/GeminiAssistant'; // 1. Importem el nou assistent
+
 // --- Components ---
+// (Aquí anirien tots els teus components interns: Confetti, DigitalDetox, WellbeingAssessment, etc.
+// Els ometo per brevetat, però HAN DE SEGUIR AL FITXER. Copia'ls del teu original.)
 
 const Confetti: React.FC = () => (
     <div className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden z-50">
@@ -77,7 +84,7 @@ const DigitalDetox: React.FC = () => {
 };
 
 const WellbeingAssessment: React.FC<{ onComplete: (plan: WellbeingPlan) => void }> = ({ onComplete }) => {
-    const { currentUser } = useAuth();
+    const { user } = useAuth();
     const { addBadge } = useGamification();
     const [answers, setAnswers] = useState<string[]>(Array(5).fill(''));
     const [loading, setLoading] = useState(false);
@@ -92,11 +99,11 @@ const WellbeingAssessment: React.FC<{ onComplete: (plan: WellbeingPlan) => void 
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!currentUser || answers.some(a => a.trim() === '')) return;
+        if (!user || answers.some(a => a.trim() === '')) return;
         setLoading(true);
         const { consells, reptes } = await generateWellbeingPlan(answers);
         const newPlan: WellbeingPlan = { answers, consejos: consells, reptes, createdAt: new Date().toISOString() };
-        await setDoc(doc(db, 'wellbeingPlans', currentUser.uid), newPlan);
+        await setDoc(doc(db, 'wellbeingPlans', user.uid), newPlan);
         addBadge('wellbeing-plan-created');
         onComplete(newPlan);
         setLoading(false);
@@ -137,7 +144,7 @@ const WellbeingPlanDisplay: React.FC<{ plan: WellbeingPlan, onReset: () => void 
 );
 
 const RecoveryRudder: React.FC = () => {
-    const { currentUser } = useAuth();
+    const { user } = useAuth();
     const { addBadge, earnedBadges } = useGamification();
     const [scores, setScores] = useState<Record<RecoveryDomain, number>>({ esperanca: 1, connexio: 1, identitat: 1, sentit: 1, apoderament: 1, benestar: 1, vida_social: 1, inclusio: 1 });
     const [loading, setLoading] = useState(true);
@@ -149,19 +156,19 @@ const RecoveryRudder: React.FC = () => {
 
     useEffect(() => {
         const fetchLastEntry = async () => {
-            if (!currentUser) { setLoading(false); return; }
-            const entryRef = doc(db, 'recoveryRudder', currentUser.uid);
+            if (!user) { setLoading(false); return; }
+            const entryRef = doc(db, 'recoveryRudder', user.uid);
             const docSnap = await getDoc(entryRef);
             if (docSnap.exists()) setScores(docSnap.data().lastEntry.scores);
             setLoading(false);
         };
         fetchLastEntry();
-    }, [currentUser]);
+    }, [user]);
 
     const handleSave = async () => {
-        if (!currentUser) return;
+        if (!user) return;
         const newEntry: RecoveryRudderEntry = { date: new Date().toISOString(), scores };
-        await setDoc(doc(db, 'recoveryRudder', currentUser.uid), { lastEntry: newEntry });
+        await setDoc(doc(db, 'recoveryRudder', user.uid), { lastEntry: newEntry });
         if (!earnedBadges.includes('first-rudder-entry')) addBadge('first-rudder-entry');
         alert("El teu progrés s'ha guardat correctament!");
     };
@@ -206,30 +213,32 @@ export default function ModuleEntrenat(): React.ReactElement {
     const [activeSubModule, setActiveSubModule] = useState<string | null>(null);
     const [wellbeingPlan, setWellbeingPlan] = useState<WellbeingPlan | null>(null);
     const [loadingPlan, setLoadingPlan] = useState(true);
-    const { currentUser } = useAuth();
+    const { user } = useAuth();
     const { earnedBadges } = useGamification();
 
     useEffect(() => {
-        if (!currentUser) { setLoadingPlan(false); return; }
+        if (!user) { setLoadingPlan(false); return; }
         const fetchPlan = async () => {
-            const planRef = doc(db, 'wellbeingPlans', currentUser.uid);
+            const planRef = doc(db, 'wellbeingPlans', user.uid);
             const planSnap = await getDoc(planRef);
             if (planSnap.exists()) setWellbeingPlan(planSnap.data() as WellbeingPlan);
             setLoadingPlan(false);
         };
         fetchPlan();
-    }, [currentUser]);
+    }, [user]);
     
     const renderContent = () => {
         if (activeSubModule) {
              return (
                  <div className="animate-fade-in">
-                    <button onClick={() => setActiveSubModule(null)} className="mb-4 text-brand-primary font-bold">&larr; Tornar al Dashboard</button>
-                    {activeSubModule === 'detox' && <DigitalDetox />}
-                    {activeSubModule === 'wellbeing' && (loadingPlan ? <p>Carregant...</p> : wellbeingPlan ? <WellbeingPlanDisplay plan={wellbeingPlan} onReset={() => setWellbeingPlan(null)} /> : <WellbeingAssessment onComplete={setWellbeingPlan} />)}
-                    {activeSubModule === 'lab' && <SocialSkillsLab />}
-                    {activeSubModule === 'rudder' && <RecoveryRudder />}
-                </div>
+                     <button onClick={() => setActiveSubModule(null)} className="mb-4 text-brand-primary font-bold">&larr; Tornar a les eines</button>
+                     {activeSubModule === 'detox' && <DigitalDetox />}
+                     {activeSubModule === 'wellbeing' && (loadingPlan ? <p>Carregant...</p> : wellbeingPlan ? <WellbeingPlanDisplay plan={wellbeingPlan} onReset={() => setWellbeingPlan(null)} /> : <WellbeingAssessment onComplete={setWellbeingPlan} />)}
+                     {activeSubModule === 'lab' && <SocialSkillsLab />}
+                     {activeSubModule === 'rudder' && <RecoveryRudder />}
+                     {/* ***** NOU COMPONENT ***** */}
+                     {activeSubModule === 'assistant' && <GeminiAssistant />} 
+                 </div>
              );
         }
 
@@ -241,14 +250,40 @@ export default function ModuleEntrenat(): React.ReactElement {
                     <p>Has aconseguit {earnedBadges.length} insígnies. Continua així!</p>
                 </div>
                 <div className="space-y-4">
-                    <SubModuleCard title="El Timó de la Recuperació" description="Avalua el teu moment vital actual." icon="🧭" onClick={() => setActiveSubModule('rudder')} />
-                    <SubModuleCard title="Pla de Benestar Digital" description="Crea un pla personalitzat amb IA." icon="🌿" onClick={() => setActiveSubModule('wellbeing')} />
-                    <SubModuleCard title="Laboratori d'Habilitats Socials" description="Practica converses en un entorn segur." icon="💬" onClick={() => setActiveSubModule('lab')} />
-                    <SubModuleCard title="Detox Digital" description="Completa reptes de desconnexió." icon="🔌" onClick={() => setActiveSubModule('detox')} />
+                    {/* ***** NOVA TARGETA ***** */}
+                    <SubModuleCard 
+                        title="Assistent Virtual" 
+                        description="Parla amb un assistent per a gestionar emocions." 
+                        icon="🤖" 
+                        onClick={() => setActiveSubModule('assistant')} 
+                    />
+                    <SubModuleCard 
+                        title="El Timó de la Recuperació" 
+                        description="Avalua el teu moment vital actual." 
+                        icon="🧭" 
+                        onClick={() => setActiveSubModule('rudder')} 
+                    />
+                    <SubModuleCard 
+                        title="Pla de Benestar Digital" 
+                        description="Crea un pla personalitzat amb IA." 
+                        icon="🌿" 
+                        onClick={() => setActiveSubModule('wellbeing')} 
+                    />
+                    <SubModuleCard 
+                        title="Laboratori d'Habilitats Socials" 
+                        description="Practica converses en un entorn segur." 
+                        icon="💬" 
+                        onClick={() => setActiveSubModule('lab')} 
+                    />
+                    <SubModuleCard 
+                        title="Detox Digital" 
+                        description="Completa reptes de desconnexió." 
+                        icon="🔌" 
+                        onClick={() => setActiveSubModule('detox')} 
+                    />
                 </div>
             </div>
         );
     }
     return renderContent();
 }
-

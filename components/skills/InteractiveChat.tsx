@@ -1,100 +1,122 @@
+// components/skills/InteractiveChat.tsx
+
 import React, { useState, useEffect, useRef } from 'react';
-import type { ChatScenario, ChatMessage } from '../../types';
+import { sendMessage, onMessagesSnapshot } from '../../services/firestoreService';
 import { generateChatResponse } from '../../services/geminiService';
+// 👇 CORRECCIÓ 1: Importem ChatScenario en lloc de Scenario
+import type { ChatMessage, ChatScenario } from '../../types';
+import { useAuth } from '../../context/AuthContext';
 
 interface InteractiveChatProps {
-    scenario: ChatScenario;
-    onBack: () => void;
+  scenario: ChatScenario; // <--- Tipus de prop corregit
 }
 
-const ChatBubble: React.FC<{ message: ChatMessage }> = ({ message }) => {
-    const isUser = message.role === 'user';
-    return (
-        <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-xs md:max-w-md lg:max-w-lg px-4 py-2 rounded-2xl ${isUser ? 'bg-brand-primary text-white' : 'bg-gray-200 text-brand-dark'}`}>
-                {message.parts[0].text}
-            </div>
-        </div>
-    );
-};
+export default function InteractiveChat({ scenario }: InteractiveChatProps) {
+  // 👇 CORRECCIÓ 2: Obtenim 'currentUser' i el renombrem a 'user' per a la resta del component
+  const { currentUser: user } = useAuth(); 
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [userInput, setUserInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const chatId = `scenario_${scenario.id}_${user?.uid}`;
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
-export default function InteractiveChat({ scenario, onBack }: InteractiveChatProps): React.ReactElement {
-    const [messages, setMessages] = useState<ChatMessage[]>([
-        { role: 'model', parts: [{ text: scenario.initialMessage }] }
-    ]);
-    const [userInput, setUserInput] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
-    const chatEndRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!user) return;
+    
+    const unsubscribe = onMessagesSnapshot(chatId, (newMessages) => {
+      // Afegim el missatge inicial si el xat està buit
+      if (newMessages.length === 0) {
+        const initialMessage: Omit<ChatMessage, 'id' | 'timestamp'> = {
+            role: 'model',
+            parts: [{ text: scenario.initialMessage }],
+            userId: 'bot',
+        };
+        sendMessage(chatId, initialMessage);
+      }
+      setMessages(newMessages);
+    });
 
-    useEffect(() => {
-        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages]);
+    return () => unsubscribe();
+  }, [chatId, user, scenario.initialMessage]);
 
-    const handleSendMessage = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!userInput.trim() || isLoading) return;
+  const handleSendMessage = async () => {
+    if (!userInput.trim() || !user) return;
 
-        const newUserMessage: ChatMessage = { role: 'user', parts: [{ text: userInput }] };
-        const newMessages = [...messages, newUserMessage];
-        setMessages(newMessages);
-        setUserInput('');
-        setIsLoading(true);
-
-        const history = newMessages.slice(0, -1);
-        
-        try {
-            const responseText = await generateChatResponse(history, userInput, scenario.systemInstruction);
-            const modelMessage: ChatMessage = { role: 'model', parts: [{ text: responseText }] };
-            setMessages(prev => [...prev, modelMessage]);
-        } catch (error) {
-            console.error("Chat error:", error);
-             const errorMessage: ChatMessage = { role: 'model', parts: [{ text: "Hi ha hagut un error. Torna a intentar-ho." }] };
-            setMessages(prev => [...prev, errorMessage]);
-        } finally {
-            setIsLoading(false);
-        }
+    // 👇 CORRECCIÓ 3: userMessage ara inclou userId, que ja és vàlid al tipus ChatMessage
+    const userMessage: Omit<ChatMessage, 'id' | 'timestamp'> = {
+      role: 'user',
+      parts: [{ text: userInput }],
+      userId: user.uid,
     };
 
-    return (
-        <div className="bg-white rounded-lg shadow-lg flex flex-col h-[75vh] max-h-[700px]">
-            <header className="p-4 border-b">
-                 <button onClick={onBack} className="text-brand-primary font-bold mb-2">&larr; Tornar als escenaris</button>
-                <h2 className="text-xl font-bold text-brand-dark">{scenario.title}</h2>
-                <p className="text-sm text-gray-500">{scenario.description}</p>
-            </header>
-            
-            <main className="flex-1 p-4 space-y-4 overflow-y-auto">
-                {messages.map((msg, index) => (
-                    <ChatBubble key={index} message={msg} />
-                ))}
-                {isLoading && (
-                    <div className="flex justify-start">
-                         <div className="px-4 py-2 rounded-2xl bg-gray-200 text-brand-dark">
-                            <span className="animate-pulse">...</span>
-                        </div>
-                    </div>
-                )}
-                 <div ref={chatEndRef} />
-            </main>
+    await sendMessage(chatId, userMessage);
+    setUserInput('');
+    setIsLoading(true);
 
-            <footer className="p-4 border-t bg-gray-50">
-                <form onSubmit={handleSendMessage} className="flex items-center space-x-2">
-                    <input
-                        type="text"
-                        value={userInput}
-                        onChange={e => setUserInput(e.target.value)}
-                        placeholder="Escriu la teva resposta..."
-                        className="flex-1 w-full px-4 py-2 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-brand-primary"
-                        disabled={isLoading}
-                    />
-                    <button type="submit" disabled={isLoading || !userInput.trim()} className="bg-brand-primary text-white rounded-full p-3 hover:bg-blue-600 disabled:bg-gray-400 transition-colors">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
-                        </svg>
-                    </button>
-                </form>
-            </footer>
-        </div>
-    );
+    try {
+      // 👇 CORRECCIÓ 4: Passem el userMessage ja creat (i tipat) per a mantenir la consistència
+      const history = [...messages, userMessage]; 
+      const botResponseText = await generateChatResponse(history, userInput, scenario.systemInstruction);
+      
+      const botMessage: Omit<ChatMessage, 'id' | 'timestamp'> = {
+        role: 'model',
+        parts: [{ text: botResponseText }],
+        userId: 'bot',
+      };
+      await sendMessage(chatId, botMessage);
+    } catch (error) {
+      console.error("Error en la resposta de l'assistent:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-gray-50 p-4 rounded-lg shadow-inner">
+      <h4 className="text-lg font-semibold mb-2">{scenario.title}</h4>
+      <p className="text-sm text-gray-600 mb-4">{scenario.description}</p>
+      <div className="flex-grow overflow-y-auto space-y-3 pr-2">
+        {messages.map((msg, index) => (
+          // 👇 CORRECCIÓ 5: Ara podem comparar msg.userId amb l'uid de l'usuari
+          <div
+            key={msg.id || index}
+            className={`flex ${msg.userId === user?.uid ? 'justify-end' : 'justify-start'}`}
+          >
+            <div
+              className={`max-w-xs lg:max-w-md p-3 rounded-2xl ${
+                msg.userId === user?.uid
+                  ? 'bg-brand-primary text-white rounded-br-none'
+                  : 'bg-gray-200 text-gray-800 rounded-bl-none'
+              }`}
+            >
+              <p className="text-sm">{msg.parts[0].text}</p>
+            </div>
+          </div>
+        ))}
+        <div ref={chatEndRef} />
+      </div>
+      <div className="mt-4 flex">
+        <input
+          type="text"
+          value={userInput}
+          onChange={(e) => setUserInput(e.target.value)}
+          className="flex-grow border rounded-l-full py-2 px-4 focus:outline-none focus:ring-2 focus:ring-brand-primary"
+          placeholder="Escriu la teva resposta..."
+          onKeyPress={(e) => e.key === 'Enter' && !isLoading && handleSendMessage()}
+          disabled={isLoading}
+        />
+        <button
+          onClick={handleSendMessage}
+          disabled={isLoading}
+          className="bg-brand-primary text-white font-bold py-2 px-6 rounded-r-full hover:bg-brand-secondary disabled:bg-gray-400 transition-colors"
+        >
+          {isLoading ? '...' : 'Enviar'}
+        </button>
+      </div>
+    </div>
+  );
 }
