@@ -1,56 +1,70 @@
-// functions/src/index.ts
+// functions/src/index.ts — Cloud Functions v2
+import fetch from 'cross-fetch';
+import type { Request, Response } from 'express';
+import { onRequest } from 'firebase-functions/v2/https';
+import { defineSecret } from 'firebase-functions/params';
 
-import * as functions from "firebase-functions";
-import * as admin from "firebase-admin";
+// Secret de Gemini (set amb: firebase functions:secrets:set GEMINI_KEY)
+const GEMINI_KEY = defineSecret('GEMINI_KEY');
 
-// Inicialitza l'SDK d'Admin per a poder interactuar amb Firestore
-admin.initializeApp();
-const db = admin.firestore();
+// 0) Funció de prova
+export const ping = onRequest(
+  { region: 'europe-west1', memory: '256MiB', timeoutSeconds: 10, cors: true },
+  async (_req: Request, res: Response): Promise<void> => {
+    res.status(200).json({ ok: true, msg: 'pong from europe-west1 v2' });
+  }
+);
 
-/**
- * Aquesta funció s'activa quan un usuari crea una nova entrada
- * al seu diari emocional.
- * Atorga una insígnia ('badge') si és la seva primera entrada.
- */
-export const onNewDiaryEntry = functions
-  .region("europe-west1") // És una bona pràctica especificar la regió
-  .firestore.document("diaries/{userId}/entries/{entryId}")
-  .onCreate(async (snap, context) => {
-    const { userId } = context.params;
-    const userRef = db.collection("users").doc(userId);
-
-    functions.logger.info(`Nova entrada de diari per a l'usuari: ${userId}`);
+// 1) Proxy segur per a Gemini
+export const geminiGenerate = onRequest(
+  {
+    region: 'europe-west1',
+    memory: '512MiB',
+    timeoutSeconds: 30,
+    cors: true,
+    secrets: [GEMINI_KEY],
+  },
+  async (req: Request, res: Response): Promise<void> => {
+    if (req.method === 'OPTIONS') {
+      res.status(204).send('');
+      return;
+    }
 
     try {
-      const userDoc = await userRef.get();
-      if (!userDoc.exists) {
-        functions.logger.warn(`L'usuari ${userId} no existeix.`);
-        return null;
+      const apiKey = process.env.GEMINI_KEY;
+      if (!apiKey) {
+        res.status(500).json({ error: 'Missing GEMINI key (secret)' });
+        return;
       }
 
-      const userData = userDoc.data();
-      const badges = userData?.badges || [];
-
-      // Comprovem si l'usuari ja té la insígnia
-      if (!badges.includes("first-diary")) {
-        // Si no la té, l'afegim
-        await userRef.update({
-          badges: admin.firestore.FieldValue.arrayUnion("first-diary"),
-        });
-        functions.logger.log(
-          `Insignia 'first-diary' atorgada a l'usuari ${userId}.`
-        );
-      } else {
-        functions.logger.log(
-          `L'usuari ${userId} ja tenia la insígnia 'first-diary'.`
-        );
+      const { contents, systemInstruction, generationConfig } = (req.body || {});
+      if (!Array.isArray(contents)) {
+        res.status(400).json({ error: 'contents[] required' });
+        return;
       }
-      return null;
-    } catch (error) {
-      functions.logger.error(
-        "Error en atorgar la insígnia 'first-diary':",
-        error
-      );
-      return null;
+
+      const url =
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent' +
+        '?key=' + encodeURIComponent(apiKey);
+
+      const payload = { contents, systemInstruction, generationConfig };
+
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await r.json().catch(() => ({}));
+
+      if (!r.ok) {
+        res.status(r.status).json({ error: data });
+        return;
+      }
+      res.status(200).json(data);
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: 'proxy_failed', message: err?.message });
     }
-  });
+  }
+);

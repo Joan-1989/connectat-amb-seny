@@ -1,11 +1,13 @@
 import React, { useMemo } from 'react';
 import { useAuth } from './context/AuthContext';
 import type { ActiveModule } from './types';
+
 import NavBar from './components/NavBar';
 import ModuleInformat from './components/modules/ModuleInformat';
 import ModuleEntrenat from './components/modules/ModuleEntrenat';
 import ModuleActivat from './components/modules/ModuleActivat';
 import ModulePerfil from './components/modules/ModulePerfil';
+import ModuleProgres from './components/modules/ModuleProgres'; // 👈 NOVETAT
 import AuthScreen from './screens/AuthScreen';
 
 export default function App(): React.ReactElement {
@@ -14,12 +16,14 @@ export default function App(): React.ReactElement {
 
   const CurrentModule = useMemo(() => {
     switch (activeModule) {
-      case 'Informa\'t':
+      case "Informa't":
         return <ModuleInformat />;
-      case 'Entrena\'t':
+      case "Entrena't":
         return <ModuleEntrenat />;
-      case 'Activa\'t':
+      case "Activa't":
         return <ModuleActivat profile={currentUser?.profile ?? null} />;
+      case "Progrés": // 👈 NOVETAT
+        return <ModuleProgres />;
       case 'Perfil':
         return <ModulePerfil />;
       default:
@@ -42,7 +46,7 @@ export default function App(): React.ReactElement {
   return (
     <div className="min-h-screen bg-brand-light flex flex-col">
       <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200 text-brand-dark shadow-sm p-4 sticky top-0 z-10">
-        <h1 className="text-2xl font-bold text-center">Connecta't amb seny</h1>
+        <h1 className="text-2xl font-bold text-center">Connecta&apos;t amb seny</h1>
       </header>
 
       <main className="flex-grow p-4 md:p-6 pb-24">

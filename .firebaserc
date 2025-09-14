@@ -1,6 +1,7 @@
 {
   "projects": {
-    "default": "connecta-t-amb-seny"
+    "default": "connecta-t-amb-seny",
+    "connecta-t-amb-seny": "connecta-t-amb-seny"
   },
   "targets": {},
   "etags": {}

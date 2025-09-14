@@ -1,6 +1,10 @@
-// types.ts — versió unificada i compatible amb el projecte
+// types.ts — versió unificada i compatible amb tot el projecte
 
-/* ====== Missatgeria (Gemini) ====== */
+// ========= Navegació de mòduls =========
+export type ActiveModule = "Informa't" | "Entrena't" | "Activa't" | "Progrés" | "Perfil";
+
+
+// ========= Missatgeria (Gemini) =========
 export type Role = 'user' | 'model';
 
 export interface ChatPart {
@@ -12,17 +16,31 @@ export interface ChatMessage {
   role: Role;
   parts: ChatPart[];
   userId?: string;
-  // Mantingut com 'any' per compat amb definicions anteriors
-  timestamp?: any;
+  timestamp?: any; // Firestore Timestamp o Date
 }
 
-/* ====== Quiz / Escenaris de xat ====== */
-export interface QuizQuestion {
-  pregunta: string;
-  opcions: string[];
-  resposta_correcta: string;
+// ========= Continguts (Informat) =========
+export interface Article {
+  id: string;
+  title: string;
+  summary: string;
+  content?: string;
+  createdAt?: any;
+  // Camps usats al teu UI i al servei Firestore:
+  mediaUrl?: string;
+  mediaType?: 'image' | 'video' | 'audio';
+  category?: string;
 }
 
+export interface Myth {
+  id: string;
+  title: string;
+  myth: string;       // Afirmació / mite
+  reality: string;    // Explicació
+  isMyth: boolean;    // true = és un mite; false = és una realitat
+}
+
+// ========= Escenaris de xat =========
 export interface ChatScenario {
   id: string;
   title: string;
@@ -32,11 +50,11 @@ export interface ChatScenario {
   initialMessage: string;
 }
 
-/* ====== Activitats: Cartes d’Emocions ====== */
+// ========= Activitats: Cartes d’emocions =========
 export interface EmotionScenario {
   id: string;
-  text: string;              // Escenari / situació
-  correctStrategyId: string; // ID de l’estratègia correcta
+  text: string;               // situació
+  correctStrategyId: string;  // ID de l’estratègia correcta
 }
 
 export interface StrategyBin {
@@ -51,11 +69,10 @@ export interface EmotionCardResult {
   correct: boolean;
 }
 
-/* ====== Activitats: Roleplay ====== */
+// ========= Activitats: Roleplay ramificat =========
 export interface RoleplayState {
   topic: string;
-  // Historial de conversa; NOMÉS 'user' | 'model'
-  context: ChatMessage[];
+  context: ChatMessage[]; // NOMÉS 'user' | 'model'
 }
 
 export interface RoleplayOption {
@@ -68,44 +85,73 @@ export interface RoleplayStep {
   options: RoleplayOption[];
 }
 
-/* ====== Activitats: Dilemes Socials ====== */
+// ========= Activitats: Dilemes socials =========
 export interface SocialDilemma {
   id: string;
   prompt: string;
   options: { id: string; label: string }[];
 }
 
-/* ====== Activitats: Diari de Reflexió ====== */
+// ========= Activitats: Diari de reflexió =========
 export interface JournalFeedback {
   strengths: string[];
   suggestions: string[];
   summary: string;
 }
 
-/* ====== Gamificació / Perfil ====== */
-export type ProfileType =
-  | 'adolescent'
-  | 'pare'
-  | 'docent'
-  | 'Adolescent'
-  | 'Tutor'
-  | 'Professional';
-
+// ========= Perfils i usuari =========
+export type ProfileType = 'Jove' | 'Tutor' | 'Professional';
 
 export interface UserProfile {
-  uid?: string;
-  email?: string;
-  displayName?: string;
-  photoURL?: string;
   type: ProfileType;
   age?: number;
 }
-export type ActiveModule = "Informa't" | "Entrena't" | "Activa't" | "Perfil";
 
+// usuari que fem servir a l’app (no el de Firebase SDK directament)
+export interface CurrentUser {
+  uid: string;
+  email: string;
+  profile: UserProfile;
+}
+
+// compatibilitat enrere (si alguns fitxers importaven 'User')
+export type User = CurrentUser;
+
+// ========= Gamificació =========
+export type BadgeId = string; // o union literals
 
 export interface Badge {
-  id: string;
+  id: BadgeId;
   name: string;
   description: string;
-  icon: string; // emoji o ruta d’imatge
+  icon: string; // emoji o classe
+}
+
+// ========= Progrés (Firestore docs simplificats) =========
+export interface EmotionCardsSessionDoc {
+  id: string;
+  createdAt: any;
+  total: number;
+  correct: number;
+}
+
+export interface RoleplaySessionDoc {
+  id: string;
+  createdAt: any;
+  topic: string;
+  stepsCount: number;
+}
+
+export interface JournalEntryDoc {
+  id: string;
+  createdAt: any;
+  text: string;
+  feedback: JournalFeedback; // feedback sempre present en el Doc
+}
+
+// ========= Qüestionaris i altres utilitats =========
+export interface QuizQuestion {
+  pregunta: string;
+  opcions: string[];
+  resposta_correcta: string;
 }

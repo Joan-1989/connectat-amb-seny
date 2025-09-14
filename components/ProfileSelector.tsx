@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import type { ProfileType, UserProfile } from '../types';
+import { ProfileType } from '../types';
+import type { UserProfile } from '../types';
 
 interface ProfileSelectorProps {
   onProfileSelect: (profile: UserProfile, age?: number) => void;
@@ -23,79 +24,80 @@ const ProfessionalIcon: React.FC = () => (
   </svg>
 );
 
-const ProfileCard: React.FC<{ title: string; description: string; icon: React.ReactNode; isSelected: boolean; onClick: () => void; }> = ({ title, description, icon, isSelected, onClick }) => (
-  <div
+const ProfileCard: React.FC<{
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  isSelected: boolean;
+  onClick: () => void;
+}> = ({ title, description, icon, isSelected, onClick }) => (
+  <button
+    type="button"
     onClick={onClick}
-    className={`p-6 border-2 rounded-xl cursor-pointer transition-all duration-300 text-center transform hover:-translate-y-1 ${isSelected ? 'border-brand-primary bg-blue-50 shadow-lg ring-2 ring-brand-primary' : 'border-gray-200 bg-white hover:shadow-md'}`}
+    className={`w-full text-left p-6 border-2 rounded-xl transition-all duration-300 transform hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-brand-primary
+      ${isSelected ? 'border-brand-primary bg-blue-50 shadow-lg ring-2 ring-brand-primary' : 'border-gray-200 bg-white hover:shadow-md'}`}
+    aria-pressed={isSelected}
   >
-    {icon}
-    <h3 className="text-xl font-bold text-brand-dark">{title}</h3>
-    <p className="text-gray-500 mt-1 text-sm">{description}</p>
-  </div>
+    <div className="text-center">
+      {icon}
+      <h3 className="text-xl font-bold text-brand-dark">{title}</h3>
+      <p className="text-gray-500 mt-1 text-sm">{description}</p>
+    </div>
+  </button>
 );
 
 export default function ProfileSelector({ onProfileSelect }: ProfileSelectorProps): React.ReactElement {
-  // Valors interns canònics per al tipus de perfil
-  const P_ADO: ProfileType = 'Adolescent';
-  const P_TUTOR: ProfileType = 'Tutor';
-  const P_PRO: ProfileType = 'Professional';
-
   const [selectedProfile, setSelectedProfile] = useState<ProfileType | null>(null);
   const [age, setAge] = useState<string>('');
 
   const handleContinue = (): void => {
     if (!selectedProfile) return;
-
-    const userAge = selectedProfile === P_ADO ? parseInt(age, 10) : undefined;
-
-    if (selectedProfile === P_ADO) {
-      if (!userAge || Number.isNaN(userAge) || userAge < 13 || userAge > 18) {
-        alert("Si us plau, introdueix una edat vàlida entre 13 i 18 anys.");
+    const profile: UserProfile = { type: selectedProfile };
+    if (selectedProfile === 'Jove') {
+      const userAge = parseInt(age, 10);
+      if (!userAge || userAge < 13 || userAge > 18) {
+        alert('Si us plau, introdueix una edat vàlida entre 13 i 18 anys.');
         return;
       }
+      profile.age = userAge;
+      onProfileSelect(profile, userAge);
+    } else {
+      onProfileSelect(profile);
     }
-
-    onProfileSelect({ type: selectedProfile }, userAge);
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white/80 backdrop-blur-sm p-8 rounded-2xl shadow-lg border border-gray-200">
         <h1 className="text-3xl font-bold text-center text-brand-dark mb-2">Benvingut/da a</h1>
-        <h2 className="text-4xl font-extrabold text-center text-brand-primary mb-6">Connecta't amb seny</h2>
+        <h2 className="text-4xl font-extrabold text-center text-brand-primary mb-6">Connecta&apos;t amb seny</h2>
         <p className="text-center text-gray-600 mb-8">Per començar, si us plau, tria el teu perfil.</p>
 
         <div className="space-y-4">
-          {/* Jove (internament: 'Adolescent') */}
           <ProfileCard
             title="Jove"
             description="Eines i consells per a tu."
             icon={<JoveIcon />}
-            isSelected={selectedProfile === P_ADO}
-            onClick={() => setSelectedProfile(P_ADO)}
+            isSelected={selectedProfile === 'Jove'}
+            onClick={() => setSelectedProfile('Jove')}
           />
-
-          {/* Tutor */}
           <ProfileCard
-            title="Tutor/a"
+            title="Tutor"
             description="Recursos per acompanyar."
             icon={<TutorIcon />}
-            isSelected={selectedProfile === P_TUTOR}
-            onClick={() => setSelectedProfile(P_TUTOR)}
+            isSelected={selectedProfile === 'Tutor'}
+            onClick={() => setSelectedProfile('Tutor')}
           />
-
-          {/* Professional */}
           <ProfileCard
             title="Professional"
             description="Guies i material de suport."
             icon={<ProfessionalIcon />}
-            isSelected={selectedProfile === P_PRO}
-            onClick={() => setSelectedProfile(P_PRO)}
+            isSelected={selectedProfile === 'Professional'}
+            onClick={() => setSelectedProfile('Professional')}
           />
         </div>
 
-        {/* Edat només si 'Adolescent' */}
-        {selectedProfile === P_ADO && (
+        {selectedProfile === 'Jove' && (
           <div className="mt-6 animate-fade-in">
             <label htmlFor="age" className="block text-sm font-medium text-gray-700 mb-1">
               Quina és la teva edat?
@@ -107,8 +109,6 @@ export default function ProfileSelector({ onProfileSelect }: ProfileSelectorProp
               onChange={(e) => setAge(e.target.value)}
               placeholder="Ex: 15"
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-brand-primary focus:border-brand-primary"
-              min={13}
-              max={18}
             />
           </div>
         )}

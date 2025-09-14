@@ -1,73 +1,103 @@
 // services/firestoreService.ts
-
 import { db } from './firebase';
-import type { Article, Myth, ChatMessage } from '../types'; // <-- Afegim el tipus ChatMessage
-// Importa les funcions modulars v9+
+import type {
+  Article,
+  Myth,
+  ChatMessage,
+  EmotionCardResult,
+  JournalFeedback,
+} from '../types';
+
 import {
   collection,
   getDocs,
-  addDoc,         // <-- Nou import per afegir documents
-  query,          // <-- Nou import per a consultes
-  orderBy,        // <-- Nou import per ordenar
-  onSnapshot,     // <-- Nou import per a escoltar en temps real
-  Timestamp,      // <-- Nou import per a marques de temps
+  addDoc,
+  query,
+  orderBy,
+  onSnapshot,
+  doc,
+  setDoc,
+  serverTimestamp,
 } from 'firebase/firestore';
 
+// ---------- Helpers de normalització ----------
+function truncate(s: string, n = 60): string {
+  if (!s) return '';
+  return s.length > n ? s.slice(0, n) + '…' : s;
+}
+
+function normalizeArticle(raw: any, id: string): Article {
+  const title =
+    raw?.title ?? raw?.titol ?? raw?.name ?? 'Article sense títol';
+  const summary =
+    raw?.summary ?? raw?.resum ?? raw?.description ?? '';
+  const content =
+    raw?.content ?? raw?.contingut ?? raw?.text ?? null;
+
+  const mediaUrl = raw?.mediaUrl ?? raw?.url_media ?? null;
+  const mediaType = raw?.mediaType ?? raw?.tipus_media ?? null;
+  const category = raw?.category ?? raw?.categoria ?? null;
+
+  return { id, title, summary, content, mediaUrl, mediaType, category };
+}
+
+
+function normalizeMyth(raw: any, id: string): Myth {
+  // Accepta múltiples esquemes:
+  // - { title, myth, reality }
+  // - { titol, mite, realitat }
+  // - { statement, explanation, isMyth }
+  const statement =
+    raw?.statement ?? raw?.myth ?? raw?.mite ?? raw?.enunciat ?? '';
+  const explanation =
+    raw?.explanation ?? raw?.reality ?? raw?.realitat ?? raw?.explicacio ?? '';
+
+  const titleBase =
+    raw?.title ?? raw?.titol ?? (statement || 'Mite');
+
+  const isMyth =
+    typeof raw?.isMyth === 'boolean' ? raw.isMyth : true; // per defecte considerem que és “mite”
+
+  return {
+    id,
+    title: String(titleBase).slice(0, 60),
+    myth: String(statement),
+    reality: String(explanation),
+    isMyth, // <-- NOVETAT
+  };
+}
+
 // =======================================================
-// FUNCIONS ORIGINALS (PER OBTENIR ARTICLES I MITES)
+// ARTICLES & MYTHS
 // =======================================================
 
 export const getArticles = async (): Promise<Article[]> => {
   const articlesCol = collection(db, 'articles');
-  const articlesSnapshot = await getDocs(articlesCol);
-  const articlesList = articlesSnapshot.docs.map((doc) => ({
-    ...doc.data(),
-    id: doc.id,
-  })) as Article[];
-  return articlesList;
+  const snap = await getDocs(articlesCol);
+  return snap.docs.map((d) => normalizeArticle(d.data(), d.id));
 };
 
 export const getMyths = async (): Promise<Myth[]> => {
   const mythsCol = collection(db, 'myths');
-  const mythsSnapshot = await getDocs(mythsCol);
-  const mythsList = mythsSnapshot.docs.map((doc) => ({
-    ...doc.data(),
-    id: doc.id,
-  })) as Myth[];
-  return mythsList;
+  const snap = await getDocs(mythsCol);
+  return snap.docs.map((d) => normalizeMyth(d.data(), d.id));
 };
 
 // =======================================================
-// NOVES FUNCIONS (PER AL XAT EN TEMPS REAL)
+// CHAT (temps real)
 // =======================================================
 
-/**
- * Envia un missatge a una sala de xat específica a Firestore.
- * @param chatId L'identificador de la sala de xat.
- * @param message L'objecte del missatge a enviar.
- */
 export const sendMessage = async (
   chatId: string,
   message: Omit<ChatMessage, 'id' | 'timestamp'>
 ): Promise<void> => {
-  try {
-    const messagesCol = collection(db, 'chats', chatId, 'messages');
-    await addDoc(messagesCol, {
-      ...message,
-      timestamp: Timestamp.now(),
-    });
-  } catch (error) {
-    console.error("Error a l'enviar el missatge:", error);
-    throw new Error('No es pot enviar el missatge');
-  }
+  const messagesCol = collection(db, 'chats', chatId, 'messages');
+  await addDoc(messagesCol, {
+    ...message,
+    timestamp: serverTimestamp(),
+  });
 };
 
-/**
- * Escolta els missatges d'un xat en temps real i executa un callback amb les dades.
- * @param chatId L'identificador de la sala de xat.
- * @param callback La funció que s'executarà cada cop que hi hagi canvis.
- * @returns Una funció per a cancel·lar la subscripció (unsubscribe).
- */
 export const onMessagesSnapshot = (
   chatId: string,
   callback: (messages: ChatMessage[]) => void
@@ -77,13 +107,15 @@ export const onMessagesSnapshot = (
 
   return onSnapshot(
     q,
-    (querySnapshot) => {
+    (qs) => {
       const messages: ChatMessage[] = [];
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
+      qs.forEach((d) => {
+        const data = d.data() as any;
         messages.push({
-          id: doc.id,
-          ...data,
+          id: d.id,
+          role: data.role,
+          parts: data.parts,
+          userId: data.userId,
           timestamp: data.timestamp,
         } as ChatMessage);
       });
@@ -93,4 +125,127 @@ export const onMessagesSnapshot = (
       console.error('Error en la subscripció als missatges:', error);
     }
   );
+};
+
+// =======================================================
+// ROLEPLAY (sessions + torns)
+// =======================================================
+
+export type RoleplaySession = {
+  id: string;
+  topic: string;
+  startedAt: any;
+  finishedAt?: any;
+  steps: number;
+  updatedAt?: any;
+};
+
+export const startRoleplaySession = async (uid: string, topic: string): Promise<string> => {
+  const sessionsCol = collection(db, 'users', uid, 'roleplaySessions');
+  const ref = await addDoc(sessionsCol, {
+    topic,
+    startedAt: serverTimestamp(),
+    finishedAt: null,
+    steps: 0,
+    updatedAt: serverTimestamp(),
+  });
+  return ref.id;
+};
+
+export const appendRoleplayTurn = async (
+  uid: string,
+  sessionId: string,
+  stepIndex: number,
+  npcSay: string,
+  userChoice?: string
+): Promise<void> => {
+  const turnRef = doc(db, 'users', uid, 'roleplaySessions', sessionId, 'turns', String(stepIndex));
+  await setDoc(turnRef, {
+    stepIndex,
+    npcSay,
+    userChoice: userChoice ?? null,
+    createdAt: serverTimestamp(),
+  });
+  const sessRef = doc(db, 'users', uid, 'roleplaySessions', sessionId);
+  await setDoc(
+    sessRef,
+    { steps: stepIndex + 1, updatedAt: serverTimestamp() },
+    { merge: true }
+  );
+};
+
+export const finishRoleplaySession = async (uid: string, sessionId: string): Promise<void> => {
+  const sessRef = doc(db, 'users', uid, 'roleplaySessions', sessionId);
+  await setDoc(
+    sessRef,
+    { finishedAt: serverTimestamp(), updatedAt: serverTimestamp() },
+    { merge: true }
+  );
+};
+
+export const listRoleplaySessions = async (uid: string): Promise<RoleplaySession[]> => {
+  const colRef = collection(db, 'users', uid, 'roleplaySessions');
+  const q = query(colRef, orderBy('startedAt', 'desc'));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as RoleplaySession[];
+};
+
+// =======================================================
+// EMOTION CARDS (guardar + llistar sessions)
+// =======================================================
+
+export type EmotionCardsSession = {
+  id: string;
+  results: EmotionCardResult[];
+  createdAt: any;
+};
+
+export const saveEmotionCardsResult = async (
+  uid: string,
+  results: EmotionCardResult[]
+): Promise<void> => {
+  const colRef = collection(db, 'users', uid, 'emotionCardSessions');
+  await addDoc(colRef, {
+    results,
+    createdAt: serverTimestamp(),
+  });
+};
+
+export const listEmotionCardsSessions = async (uid: string): Promise<EmotionCardsSession[]> => {
+  const colRef = collection(db, 'users', uid, 'emotionCardSessions');
+  const q = query(colRef, orderBy('createdAt', 'desc'));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as EmotionCardsSession[];
+};
+
+// =======================================================
+// JOURNAL (guardar + llistar entrades)
+// =======================================================
+
+export type JournalEntry = {
+  id: string;
+  text: string;
+  feedback?: JournalFeedback;
+  createdAt: any;
+};
+
+export const saveJournalEntry = async (
+  uid: string,
+  text: string,
+  feedback?: JournalFeedback
+): Promise<string> => {
+  const colRef = collection(db, 'users', uid, 'journalEntries');
+  const ref = await addDoc(colRef, {
+    text,
+    feedback: feedback ?? null,
+    createdAt: serverTimestamp(),
+  });
+  return ref.id;
+};
+
+export const listJournalEntries = async (uid: string): Promise<JournalEntry[]> => {
+  const colRef = collection(db, 'users', uid, 'journalEntries');
+  const q = query(colRef, orderBy('createdAt', 'desc'));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as JournalEntry[];
 };

@@ -1,0 +1,13 @@
+node_modules
+dist
+build
+.eslintrc.cjs
+vite.config.ts
+firebase.json
+firebase.*
+.functions/
+.functions
+functions/
+coverage
+*.config.cjs
+*.config.js

@@ -2,79 +2,45 @@ import React, { useState } from 'react';
 import type { ChatScenario } from '../../types';
 import { chatScenarios } from '../../data/chatScenarios';
 import InteractiveChat from './InteractiveChat';
+import ActivitiesHub from '../activities/ActivitiesHub'; // ✅ relatiu, sense '@'
 
-// 🔽 Import del nou Hub
-import ActivitiesHub from '@/components/activities/ActivitiesHub';
-
-type Tab = 'escenaris' | 'laboratori';
+const ScenarioCard: React.FC<{ scenario: ChatScenario; onSelect: () => void; }> = ({ scenario, onSelect }) => (
+  <button
+    type="button"
+    onClick={onSelect}
+    className="w-full bg-white p-5 rounded-lg shadow-md hover:shadow-xl cursor-pointer transition-shadow duration-200 flex items-center space-x-4 text-left"
+    aria-label={`Obrir escenari: ${scenario.title}`}
+  >
+    <span className="text-4xl">{scenario.icon}</span>
+    <div>
+      <h3 className="font-bold text-brand-dark">{scenario.title}</h3>
+      <p className="text-sm text-gray-600">{scenario.description}</p>
+    </div>
+  </button>
+);
 
 export default function SocialSkillsLab(): React.ReactElement {
   const [selectedScenario, setSelectedScenario] = useState<ChatScenario | null>(null);
-  const [tab, setTab] = useState<Tab>('escenaris');
 
-  // 🔹 Si hi ha escenari seleccionat → mostra directament el xat interactiu
   if (selectedScenario) {
-    return (
-      <InteractiveChat
-        scenario={selectedScenario}
-        onBack={() => setSelectedScenario(null)}
-      />
-    );
+    return <InteractiveChat scenario={selectedScenario} onBack={() => setSelectedScenario(null)} />;
   }
 
   return (
     <div className="animate-fade-in">
-      <h2 className="text-2xl font-bold mb-4 text-brand-dark">
-        Laboratori d'Habilitats Socials
-      </h2>
-      <p className="mb-6 text-gray-600">
-        Entrena habilitats socials i gestió emocional a través de converses i activitats interactives.
-      </p>
+      <h2 className="text-2xl font-bold mb-4 text-brand-dark">Laboratori d'Habilitats Socials</h2>
+      <p className="mb-6 text-gray-600">Tria un escenari per practicar una conversa. Un assistent d'IA jugarà un rol per ajudar-te a entrenar en un entorn segur.</p>
 
-      {/* 🔹 Pestanyes */}
-      <div className="flex gap-2 mb-6">
-        <button
-          onClick={() => setTab('escenaris')}
-          className={`px-4 py-2 rounded font-semibold transition-colors ${
-            tab === 'escenaris'
-              ? 'bg-brand-primary text-white'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-          }`}
-        >
-          💬 Escenaris de Xat
-        </button>
-        <button
-          onClick={() => setTab('laboratori')}
-          className={`px-4 py-2 rounded font-semibold transition-colors ${
-            tab === 'laboratori'
-              ? 'bg-brand-primary text-white'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-          }`}
-        >
-          🧩 Laboratori Interactiu
-        </button>
+      {/* Hub opcional d'activitats relacionades */}
+      <div className="mb-6">
+        <ActivitiesHub />
       </div>
 
-      {/* 🔹 Contingut segons la pestanya */}
-      {tab === 'escenaris' && (
-        <div className="space-y-4">
-          {chatScenarios.map((sc) => (
-            <div
-              key={sc.id}
-              onClick={() => setSelectedScenario(sc)}
-              className="bg-white p-5 rounded-lg shadow-md hover:shadow-xl cursor-pointer transition-shadow duration-200 flex items-center space-x-4"
-            >
-              <span className="text-4xl">{sc.icon}</span>
-              <div>
-                <h3 className="font-bold text-brand-dark">{sc.title}</h3>
-                <p className="text-sm text-gray-600">{sc.description}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {tab === 'laboratori' && <ActivitiesHub />}
+      <div className="space-y-4">
+        {chatScenarios.map(sc => (
+          <ScenarioCard key={sc.id} scenario={sc} onSelect={() => setSelectedScenario(sc)} />
+        ))}
+      </div>
     </div>
   );
 }

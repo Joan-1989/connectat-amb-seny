@@ -1,132 +1,129 @@
+// components/modules/ModuleActivat.tsx
 import React, { useState } from 'react';
-import type { ProfileType } from '../../types';
-import { generateConversationStarters } from '../../services/geminiService';
+import type { UserProfile } from '../../types';
 
 interface ModuleActivatProps {
   profile: UserProfile | null;
 }
 
-const EMERGENCY_CONTACTS = [
-    { name: "Telèfon de l'Esperança", phone: "717 003 717" },
-    { name: "Emergències", phone: "112" },
-    { name: "Salut Respon", phone: "061" },
-];
+function HelpModal({ onClose }: { onClose: () => void }): React.ReactElement {
+  const [topic, setTopic] = useState('');
+  const [message, setMessage] = useState('');
 
-const HelpModal: React.FC<{ onClose: () => void }> = ({ onClose }) => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-30 animate-fade-in">
-        <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full m-4">
-            <h2 className="text-2xl font-bold text-red-600 mb-4">Ajuda Immediata</h2>
-            <p className="mb-4">Si et trobes en una situació de crisi, contacta amb un d'aquests números.</p>
-            <div className="space-y-3">
-                {EMERGENCY_CONTACTS.map(contact => (
-                    <a key={contact.phone} href={`tel:${contact.phone}`} className="block w-full text-left bg-gray-100 p-3 rounded-lg hover:bg-gray-200">
-                        <p className="font-bold">{contact.name}</p>
-                        <p className="text-brand-primary">{contact.phone}</p>
-                    </a>
-                ))}
-            </div>
-            <button onClick={onClose} className="mt-6 w-full bg-gray-600 text-white font-bold py-2 px-4 rounded-lg">Tancar</button>
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="help-modal-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+    >
+      <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
+        <div className="flex items-center justify-between">
+          <h3 id="help-modal-title" className="text-xl font-bold text-brand-dark">
+            Ajuda immediata
+          </h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded bg-gray-100 px-2 py-1 text-sm hover:bg-gray-200"
+            aria-label="Tancar"
+          >
+            ✕
+          </button>
         </div>
+
+        <p className="mt-2 text-sm text-gray-600">
+          Explica breument què necessites. Ens ajuda a orientar-te millor.
+        </p>
+
+        <form className="mt-4 space-y-4" onSubmit={(e) => e.preventDefault()}>
+          <div>
+            <label htmlFor="help-topic" className="block text-sm font-medium text-gray-700">
+              Tema
+            </label>
+            <select
+              id="help-topic"
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary"
+            >
+              <option value="">— Selecciona un tema —</option>
+              <option value="assetjament">Assetjament</option>
+              <option value="seguretat">Seguretat digital</option>
+              <option value="benestar">Benestar emocional</option>
+              <option value="altres">Altres</option>
+            </select>
+          </div>
+
+          <div>
+            <label htmlFor="help-message" className="block text-sm font-medium text-gray-700">
+              Explica’ns què passa
+            </label>
+            <textarea
+              id="help-message"
+              rows={4}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary"
+              placeholder="Escriu aquí…"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded bg-gray-200 px-4 py-2 text-sm font-medium hover:bg-gray-300"
+            >
+              Cancel·lar
+            </button>
+            <button
+              type="submit"
+              className="rounded bg-brand-primary px-4 py-2 text-sm font-bold text-white hover:bg-brand-secondary"
+              aria-label="Enviar sol·licitud d’ajuda"
+            >
+              Enviar
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
-);
+  );
+}
 
-const FamilyEducatorSpace: React.FC = () => {
-    const [starters, setStarters] = useState<string[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [topic, setTopic] = useState<string>('seguretat online');
-    const [error, setError] = useState<string | null>(null);
-    
-    const resources = {
-        "Guies": [
-            { title: "Guia sobre Ciberassetjament (Internet Segura)", description: "Com detectar i actuar davant l'assetjament en línia.", url: "https://www.internetsegura.cat/ciberassetjament/" },
-        ],
-        "Tutorials": [
-             { title: "Configurar Controls Parentals a iOS", description: "Pas a pas per a una configuració efectiva.", url: "https://support.apple.com/ca-es/HT201304" },
-        ],
-        "Activitats": [
-            { title: "10 coses per fer en família", description: "Fomenta la connexió familiar offline.", url: "https://faros.hsjdbcn.org/ca/articulo/10-coses-fer-familia-idees-desconnectar-pantalles-divertir-se" },
-        ]
-    };
-
-    const handleGenerate = async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const generatedStarters = await generateConversationStarters(topic);
-            if (generatedStarters.length === 0) {
-                setError("No s'han pogut generar idees. Intenta-ho de nou més tard.");
-            }
-            setStarters(generatedStarters);
-        } catch (err) {
-            setError("Hi ha hagut un error en contactar amb la IA.");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    return (
-        <div className="bg-white p-6 rounded-lg shadow-md mt-8 space-y-8">
-            <h3 className="text-xl font-bold text-brand-dark -mb-4">Espai per a Famílies i Educadors</h3>
-            
-            <section>
-                <h4 className="font-bold text-lg mb-2 text-brand-primary">Iniciadors de Conversa</h4>
-                <p className="mb-4 text-sm text-gray-600">Genera idees per iniciar converses importants amb els joves.</p>
-                <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700">Tema:</label>
-                    <select value={topic} onChange={e => setTopic(e.target.value)} className="w-full p-2 border rounded mt-1">
-                        <option value="seguretat online">Seguretat Online</option>
-                        <option value="ciberassetjament">Ciberassetjament</option>
-                        <option value="salut mental">Salut Mental</option>
-                        <option value="ús del mòbil">Ús del Mòbil</option>
-                    </select>
-                </div>
-                <button onClick={handleGenerate} disabled={loading} className="w-full bg-brand-accent text-white font-bold py-2 px-4 rounded-lg disabled:bg-gray-400">
-                    {loading ? 'Generant...' : 'Genera Idees'}
-                </button>
-                {error && <p className="mt-4 text-sm text-red-600 bg-red-100 p-3 rounded-md">{error}</p>}
-                {starters.length > 0 && (
-                    <div className="mt-6 bg-amber-50 p-3 rounded-lg">
-                        <h5 className="font-bold mb-2">Aquí tens algunes idees:</h5>
-                        <ul className="list-disc list-inside space-y-2 text-gray-700">
-                            {starters.map((s, i) => <li key={i}>{s}</li>)}
-                        </ul>
-                    </div>
-                )}
-            </section>
-
-            <section>
-                <h4 className="font-bold text-lg mb-2 text-brand-primary">Biblioteca de Recursos</h4>
-                <div className="space-y-4">
-                    {Object.entries(resources).map(([category, docs]) => (
-                        <div key={category}>
-                             <h5 className="font-semibold text-gray-700">{category}</h5>
-                             {docs.map((doc, i) => (
-                                 <a href={doc.url} target="_blank" rel="noopener noreferrer" key={i} className="block bg-gray-50 hover:bg-gray-100 p-3 rounded-lg transition-colors mt-1">
-                                    <p className="font-semibold text-brand-dark">{doc.title}</p>
-                                    <p className="text-sm text-gray-600">{doc.description}</p>
-                                </a>
-                             ))}
-                        </div>
-                    ))}
-                </div>
-            </section>
-        </div>
-    );
-};
+function FamilyEducatorSpace(): React.ReactElement {
+  return (
+    <section className="mt-6 rounded-lg bg-white p-4 shadow-md">
+      <h3 className="text-lg font-semibold text-brand-dark">Espai per a famílies i educadors</h3>
+      <p className="mt-1 text-sm text-gray-600">
+        Recursos pràctics per acompanyar adolescents: guies d&apos;assertivitat, protocols bàsics de
+        seguretat i dinàmiques per fer a casa o a l&apos;aula.
+      </p>
+      <ul className="mt-3 list-disc pl-5 text-sm text-gray-700">
+        <li>Com parlar de límits digitals</li>
+        <li>Com actuar davant l&apos;assetjament</li>
+        <li>Idees de converses obertes i no judicatives</li>
+      </ul>
+    </section>
+  );
+}
 
 export default function ModuleActivat({ profile }: ModuleActivatProps): React.ReactElement {
   const [showHelpModal, setShowHelpModal] = useState(false);
-  const isAdultProfile = profile?.type === 'Tutor' || profile?.type === 'Professional';
+
+  const isAdultProfile =
+    profile?.type === 'Tutor' || profile?.type === 'Professional';
 
   return (
     <div className="animate-fade-in">
-      <h2 className="text-2xl font-bold mb-6 text-brand-dark">Activa't</h2>
-      
-      <button 
-        onClick={() => setShowHelpModal(true)} 
-        className="w-full bg-red-500 text-white font-bold py-4 px-4 rounded-lg shadow-lg hover:bg-red-600 transition-transform transform hover:scale-105 duration-300 text-lg"
+      <h2 className="mb-6 text-2xl font-bold text-brand-dark">Activa&apos;t</h2>
+
+      <button
+        type="button"
+        onClick={() => setShowHelpModal(true)}
+        className="w-full transform rounded-lg bg-red-500 px-4 py-4 text-lg font-bold text-white shadow-lg transition-transform duration-300 hover:scale-105 hover:bg-red-600"
       >
-        Botó d'Ajuda Immediata
+        Botó d&apos;Ajuda Immediata
       </button>
 
       {isAdultProfile && <FamilyEducatorSpace />}
@@ -135,4 +132,3 @@ export default function ModuleActivat({ profile }: ModuleActivatProps): React.Re
     </div>
   );
 }
-

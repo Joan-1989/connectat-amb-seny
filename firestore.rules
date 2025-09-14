@@ -1,0 +1,65 @@
+// firestore.rules
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- Public: lectura d’articles i mites ---
+    match /articles/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /myths/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // --- Xats (per escenaris i assistent) ---
+    // chats/{chatId}/messages/{messageId}
+    match /chats/{chatId} {
+      allow read, write: if isChatOwner(chatId);
+      match /messages/{messageId} {
+        allow read, write: if isChatOwner(chatId);
+      }
+    }
+
+    // --- Dades per usuari ---
+    match /users/{uid} {
+      allow read, write: if isOwner(uid) || isAdmin();
+
+      // Roleplay
+      match /roleplaySessions/{sessionId} {
+        allow read, write: if isOwner(uid) || isAdmin();
+        match /turns/{turnId} {
+          allow read, write: if isOwner(uid) || isAdmin();
+        }
+      }
+
+      // Emotion Cards
+      match /emotionCardSessions/{sessionId} {
+        allow read, write: if isOwner(uid) || isAdmin();
+      }
+
+      // Journal
+      match /journalEntries/{entryId} {
+        allow read, write: if isOwner(uid) || isAdmin();
+      }
+    }
+
+    // Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+    function isAdmin() {
+      // Necessita custom claims: request.auth.token.admin = true
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+    function isChatOwner(chatId) {
+      // Format dels teus chatId: scenario_<scenarioId>_<uid> o assistent_<uid>
+      return isSignedIn() &&
+        (chatId.endsWith('_' + request.auth.uid) || chatId == request.auth.uid);
+    }
+  }
+}
