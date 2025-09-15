@@ -1,197 +1,309 @@
-// services/geminiService.ts — client cap al proxy /api/gemini
+// services/geminiService.ts
+// ─────────────────────────────────────────────────────────────────────────────
+// Client únic per parlar amb el proxy de Gemini (/api/gemini) amb el format
+// { contents: [...] } i, opcionalment, { systemInstruction, generationConfig }.
+// IMPORTANT: sense "additionalProperties" als responseSchema (causava 400).
+// ─────────────────────────────────────────────────────────────────────────────
+
 import type {
   ChatMessage,
-  QuizQuestion,
   RoleplayState,
   RoleplayStep,
-  JournalFeedback
+  JournalFeedback,
 } from '../types';
 
-const PROXY_URL = '/api/gemini';
+const GEMINI_ENDPOINT = '/api/gemini';
 
-// utilitat per fer POST al proxy
-async function postGemini(payload: unknown): Promise<any> {
-  const res = await fetch(PROXY_URL, {
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+type BareMessage = { role: 'user' | 'model'; parts: { text: string }[] };
+
+function cleanHistory(history: ChatMessage[]): BareMessage[] {
+  const cleaned = history
+    .filter((m) => m && (m.role === 'user' || m.role === 'model'))
+    .map((m) => ({
+      role: m.role,
+      parts: [{ text: String(m.parts?.[0]?.text ?? '') }],
+    }));
+  // El 1r element HA de ser 'user'. Si no, elminem el prefix fins trobar-ne un.
+  while (cleaned.length && cleaned[0].role !== 'user') {
+    cleaned.shift();
+  }
+  return cleaned;
+}
+
+function toUserContent(text: string): BareMessage {
+  return { role: 'user', parts: [{ text }] };
+}
+
+function toSystemInstruction(text?: string) {
+  if (!text) return undefined;
+  return { role: 'system', parts: [{ text }] };
+}
+
+function stripCodeFences(s: string): string {
+  if (!s) return s;
+  return s.replace(/^```(?:json)?\s*/i, '').replace(/```$/i, '').trim();
+}
+
+function tryParseJSON<T = unknown>(maybe: string | unknown): T | null {
+  if (typeof maybe !== 'string') return null;
+  const txt = stripCodeFences(maybe);
+  try {
+    return JSON.parse(txt) as T;
+  } catch {
+    return null;
+  }
+}
+
+function extractText(out: unknown): string {
+  if (typeof out === 'string') return out.trim();
+  if (out && typeof out === 'object') {
+    const anyOut = out as any;
+    if (typeof anyOut.text === 'string') return anyOut.text.trim();
+    const parts = anyOut?.candidates?.[0]?.content?.parts;
+    if (Array.isArray(parts)) {
+      const joined = parts.map((p: any) => p?.text ?? '').join('').trim();
+      if (joined) return joined;
+    }
+  }
+  return '';
+}
+
+async function callGemini<T = unknown>(payload: unknown): Promise<T> {
+  const res = await fetch(GEMINI_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  const data = await res.json().catch(() => ({}));
+
+  const contentType = res.headers.get('content-type') || '';
+  const body = contentType.includes('application/json') ? await res.json() : await res.text();
+
   if (!res.ok) {
-    console.error('Gemini proxy error:', data);
+    console.error('Gemini proxy error:', typeof body === 'string' ? body : JSON.stringify(body));
     throw new Error(`Gemini HTTP ${res.status}`);
   }
-  return data;
+
+  return body as T;
 }
 
-// extreu text del response de Gemini API v1beta
-function textFromResponse(apiResponse: any): string {
-  try {
-    return apiResponse?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-  } catch {
-    return '';
-  }
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// 1) XAT GENERAL
+// ─────────────────────────────────────────────────────────────────────────────
 
-/** CHAT GENERAL */
 export async function generateChatResponse(
   history: ChatMessage[],
   newMessage: string,
   systemInstruction: string
 ): Promise<string> {
-  const sys = systemInstruction
-    ? { role: 'system', parts: [{ text: systemInstruction }] }
-    : undefined;
+  const contents = [...cleanHistory(history), toUserContent(newMessage)];
 
-  const contents = [
-    ...(sys ? [sys] : []),
-    ...history.map(m => ({ role: m.role, parts: m.parts })),
-    { role: 'user', parts: [{ text: newMessage }] }
-  ];
-
-  const generationConfig = {
-    temperature: 0.4,
-    maxOutputTokens: 512
+  const payload = {
+    // model: 'gemini-1.5-flash', // opcional si el proxy ho permet
+    contents,
+    systemInstruction: toSystemInstruction(systemInstruction),
   };
 
-  const resp = await postGemini({ contents, generationConfig });
-  return textFromResponse(resp) || "Uups! Sembla que he tingut un problema per respondre. Prova-ho de nou.";
+  const out = await callGemini<unknown>(payload);
+  const text = extractText(out);
+  return text || 'Ho sento, no he entès la consulta.';
 }
 
-/** QÜESTIONARI */
-export async function generateQuiz(topic: string): Promise<QuizQuestion[]> {
-  const sys = { role: 'system', parts: [{ text: 'Respon sempre en català i en format JSON vàlid.' }] };
-  const contents = [
-    sys,
-    { role: 'user', parts: [{ text: `Genera un qüestionari de 5 preguntes de selecció múltiple sobre "${topic}" per a adolescents. Format JSON: [{"pregunta": "...", "opcions": ["A","B","C","D"], "resposta_correcta": "A"}]` }] }
-  ];
-  const generationConfig = {
-    temperature: 0.5,
-    maxOutputTokens: 800
+// ─────────────────────────────────────────────────────────────────────────────
+// 2) DIARI DE REFLEXIÓ -> JSON (fortaleses, suggeriments, resum)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function analyzeJournalEntry(text: string): Promise<JournalFeedback> {
+  const prompt = `
+Analitza aquest escrit d'un/a adolescent i retorna JSON amb:
+- "strengths": 3 punts positius (frases curtes)
+- "suggestions": 3 idees pràctiques, amables i concretes
+- "summary": 1-2 frases en català, validades i empàtiques
+
+Text:
+"""${text}"""
+  `.trim();
+
+  const payload = {
+    contents: [toUserContent(prompt)],
+    generationConfig: {
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: 'object',
+        properties: {
+          strengths: { type: 'array', items: { type: 'string' } },
+          suggestions: { type: 'array', items: { type: 'string' } },
+          summary: { type: 'string' },
+        },
+        required: ['strengths', 'suggestions', 'summary'],
+      },
+    },
   };
-  const resp = await postGemini({ contents, generationConfig });
-  const txt = textFromResponse(resp);
-  try {
-    const parsed = JSON.parse(txt);
-    if (Array.isArray(parsed)) return parsed as QuizQuestion[];
-  } catch {
-    /* ignore */
+
+  const out = await callGemini<unknown>(payload);
+  const raw = extractText(out);
+  const parsed = tryParseJSON<JournalFeedback>(raw);
+
+  if (parsed && Array.isArray(parsed.strengths) && Array.isArray(parsed.suggestions) && typeof parsed.summary === 'string') {
+    return parsed;
   }
-  return [];
-}
 
-/** PLA DE BENESTAR (diari / autoavaluació) */
-export async function generateWellbeingPlan(answers: string[]): Promise<{ consells: string[]; reptes: string[] }> {
-  const sys = { role: 'system', parts: [{ text: 'Respon sempre en català i en JSON vàlid.' }] };
-  const contents = [
-    sys,
-    { role: 'user', parts: [{ text: `Amb aquestes respostes d'autoavaluació (${answers.join(', ')}), crea un pla amb 3 consells i 3 reptes setmanals. Dona'm JSON: {"consells":["..."],"reptes":["..."]}` }] }
-  ];
-  const generationConfig = { temperature: 0.4, maxOutputTokens: 500 };
-  const resp = await postGemini({ contents, generationConfig });
-  const txt = textFromResponse(resp);
-  try {
-    const parsed = JSON.parse(txt);
-    if (parsed?.consells && parsed?.reptes) return parsed;
-  } catch { /* ignore */ }
-  return { consells: [], reptes: [] };
-}
-
-/** INICIADORS DE CONVERSA (per a adults) */
-export async function generateConversationStarters(topic: string): Promise<string[]> {
-  const sys = { role: 'system', parts: [{ text: 'Respon en català i en JSON pur (array de strings).' }] };
-  const contents = [
-    sys,
-    { role: 'user', parts: [{ text: `Genera 5 iniciadors de conversa per parlar amb adolescents sobre "${topic}".` }] }
-  ];
-  const generationConfig = { temperature: 0.5, maxOutputTokens: 400 };
-  const resp = await postGemini({ contents, generationConfig });
-  const txt = textFromResponse(resp);
-  try {
-    const arr = JSON.parse(txt);
-    if (Array.isArray(arr)) return arr as string[];
-  } catch { /* ignore */ }
-  return [];
-}
-
-/** DILEMES SOCIALS — retorna { pros, cons, assertiveResponse } */
-export async function analyzeDilemmaChoice(
-  prompt: string,
-  choice: string
-): Promise<{ pros: string[]; cons: string[]; assertiveResponse: string }> {
-  const contents = [
-    { role: 'system', parts: [{ text: 'Ets un mentor empàtic. Respon en català i DONA JSON amb claus "pros", "cons", "assertiveResponse".' }] },
-    { role: 'user', parts: [{ text: `Dilema: ${prompt}\nElecció triada: ${choice}\nDona'm JSON: {"pros":["..."],"cons":["..."],"assertiveResponse":"..."} (res sense comentaris).` }] }
-  ];
-  const generationConfig = { temperature: 0.4, maxOutputTokens: 300 };
-  const resp = await postGemini({ contents, generationConfig });
-  const txt = textFromResponse(resp);
-
-  // Intenta JSON directe
-  try {
-    const parsed = JSON.parse(txt);
-    if (parsed && Array.isArray(parsed.pros) && Array.isArray(parsed.cons) && typeof parsed.assertiveResponse === 'string') {
-      return parsed;
-    }
-  } catch { /* parse fallback */ }
-
-  // Fallback heurístic si arriba text lliure
-  const pros: string[] = [];
-  const cons: string[] = [];
-  let assertiveResponse = '';
-  (txt || '').split('\n').forEach(l => {
-    const s = l.trim();
-    if (/^(\+|pros?:)/i.test(s)) pros.push(s.replace(/^(\+|pros?:)\s*/i, ''));
-    else if (/^(-|contres?:|cons?:)/i.test(s)) cons.push(s.replace(/^(-|contres?:|cons?:)\s*/i, ''));
-    else if (/^(resposta|assertiu|assertive)/i.test(s)) assertiveResponse = s.replace(/^[^:]*:\s*/i, '');
-  });
   return {
-    pros: pros.length ? pros : [txt || ''],
-    cons,
-    assertiveResponse: assertiveResponse || 'Prova a expressar el teu límit amb respecte i claredat, oferint una alternativa viable.'
+    strengths: ['T’has expressat amb sinceritat.', 'Mostres autoconeixement.', 'Vols millorar.'],
+    suggestions: ['Respira 3 cops profunds quan notis tensió.', 'Escriu 1 objectiu petit per demà.', 'Parla amb algú de confiança 10 minuts.'],
+    summary: 'Estàs fent una bona reflexió. Amb petits passos i suport, avançaràs.',
   };
 }
 
-/** ROLEPLAY RAMIFICAT (un pas) */
-export async function generateRoleplayStep(state: RoleplayState, lastChoice?: string): Promise<RoleplayStep> {
-  const preface = `Tema: ${state.topic}. Estil: natural, adolescent, en català. Dona 2-3 opcions curtes d'acció.`;
+// ─────────────────────────────────────────────────────────────────────────────
+// 3) DILEMES SOCIALS -> JSON (pros/cons/resposta assertiva)
+// ─────────────────────────────────────────────────────────────────────────────
 
-  const contents = [
-    { role: 'system', parts: [{ text: preface }] },
-    ...state.context.map(m => ({ role: m.role, parts: m.parts })),
-    { role: 'user', parts: [{ text: lastChoice ? `Continuem. L'usuari ha triat: "${lastChoice}". Respon amb una frase (NPC) i noves opcions.` : 'Comencem el roleplay. Proposa un inici i 2-3 opcions.' }] }
-  ];
-  const generationConfig = { temperature: 0.6, maxOutputTokens: 350 };
-  const resp = await postGemini({ contents, generationConfig });
-  const text = textFromResponse(resp);
+export async function analyzeDilemmaChoice(
+  dilemmaPrompt: string,
+  chosenOptionLabel: string
+): Promise<{ pros: string[]; cons: string[]; assertiveResponse: string }> {
+  const prompt = `
+Analitza aquest dilema i la decisió triada. Retorna JSON amb:
+- "pros": 3 avantatges de l'opció triada
+- "cons": 3 possibles inconvenients/riscs
+- "assertiveResponse": una resposta assertiva (1-2 frases) per comunicar-la
 
-  // Heurística per extreure opcions
-  const lines = (text || '').split('\n').map(s => s.trim()).filter(Boolean);
-  const npcSay = lines[0] || text || '';
-  const optionLines = lines.slice(1).filter(l => /^[-•]/.test(l)).slice(0, 3);
-  const options = (optionLines.length ? optionLines : ['Opció A', 'Opció B'].map((l, i) => `-${l}`))
-    .map((l, idx) => ({
-      id: `opt_${Date.now()}_${idx}`,
-      label: l.replace(/^[-•]\s?/, '')
-    }));
+Dilema:
+"""${dilemmaPrompt}"""
 
-  return { npcSay, options };
+Opció triada:
+"""${chosenOptionLabel}"""
+  `.trim();
+
+  const payload = {
+    contents: [toUserContent(prompt)],
+    generationConfig: {
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: 'object',
+        properties: {
+          pros: { type: 'array', items: { type: 'string' } },
+          cons: { type: 'array', items: { type: 'string' } },
+          assertiveResponse: { type: 'string' },
+        },
+        required: ['pros', 'cons', 'assertiveResponse'],
+      },
+    },
+  };
+
+  const out = await callGemini<unknown>(payload);
+  const raw = extractText(out);
+  const parsed = tryParseJSON<{ pros: string[]; cons: string[]; assertiveResponse: string }>(raw);
+
+  if (parsed && Array.isArray(parsed.pros) && Array.isArray(parsed.cons) && typeof parsed.assertiveResponse === 'string') {
+    return parsed;
+  }
+
+  return {
+    pros: ['Et mantens fidel als teus valors.', 'Protegeixes els teus límits.', 'Dones exemple d’assertivitat.'],
+    cons: ['Algú pot molestar-se.', 'Potser caldrà negociar opcions.', 'No tothom ho entendrà al moment.'],
+    assertiveResponse: 'Prefereixo no fer-ho aquesta vegada. Gràcies per pensar en mi; podem buscar una alternativa que ens encaixi a tots.',
+  };
 }
 
-/** DIARI: analitza una entrada i retorna JournalFeedback */
-export async function analyzeJournalEntry(entryText: string): Promise<JournalFeedback> {
-  const contents = [
-    { role: 'system', parts: [{ text: 'Ets un orientador empàtic. Respon en català. Dona JSON {"strengths":["..."],"suggestions":["..."],"summary":"..."}' }] },
-    { role: 'user', parts: [{ text: `Analitza aquest text de diari i retorna JSON: ${entryText}` }] }
+// ─────────────────────────────────────────────────────────────────────────────
+// 4) ROLEPLAY RAMIFICAT (cada pas amb 3 opcions)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function generateRoleplayStep(
+  state: RoleplayState,
+  _userChoiceLabel?: string
+): Promise<RoleplayStep> {
+  const historyText = cleanHistory(state.context)
+    .map((m) => `${m.role === 'user' ? 'Usuari' : 'NPC'}: ${m.parts[0].text}`)
+    .join('\n');
+
+  const prompt = `
+Estem fent un roleplay breu sobre: "${state.topic}".
+Context fins ara:
+${historyText || '(cap missatge encara)'}
+
+Si hi ha "Usuari tria: X", continua de forma coherent.
+
+Retorna JSON amb:
+{
+  "npcSay": "parla natural en català (1-3 frases)",
+  "options": ["opció A breu", "opció B breu", "opció C breu"]
+}
+  `.trim();
+
+  const payload = {
+    contents: [toUserContent(prompt)],
+    generationConfig: {
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: 'object',
+        properties: {
+          npcSay: { type: 'string' },
+          options: {
+            type: 'array',
+            items: { type: 'string' },
+            minItems: 3,
+            maxItems: 3,
+          },
+        },
+        required: ['npcSay', 'options'],
+      },
+    },
+  };
+
+  const out = await callGemini<unknown>(payload);
+  const raw = extractText(out);
+  const parsed = tryParseJSON<{ npcSay: string; options: string[] }>(raw);
+
+  const safeNpc = parsed?.npcSay?.trim() || 'Ei, com ho veus?';
+  const safeOpts = Array.isArray(parsed?.options) && parsed!.options.length >= 3
+    ? parsed!.options.slice(0, 3)
+    : ['Dir que no amb respecte', 'Proposar alternativa', 'Demanar més info'];
+
+  return {
+    npcSay: safeNpc,
+    options: safeOpts.map((label, i) => ({ id: `opt-${i + 1}`, label })),
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 5) CONVERSES (famílies/pros) – 5 preguntes obertes
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function generateConversationStarters(topic: string): Promise<string[]> {
+  const prompt = `
+Crea 5 iniciadors de conversa en català (preguntes obertes, no jutjadores) per parlar amb adolescents sobre "${topic}".
+Només retorna un array JSON de 5 cadenes.
+  `.trim();
+
+  const payload = {
+    contents: [toUserContent(prompt)],
+    generationConfig: {
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: 'array',
+        items: { type: 'string' },
+        minItems: 5,
+        maxItems: 5,
+      },
+    },
+  };
+
+  const out = await callGemini<unknown>(payload);
+  const raw = extractText(out);
+  const parsed = tryParseJSON<string[]>(raw);
+  if (Array.isArray(parsed) && parsed.length >= 3) return parsed.slice(0, 5);
+
+  return [
+    'Com et fa sentir això últim que ha passat al mòbil?',
+    'Què creus que t’ajudaria a tenir més calma amb les pantalles?',
+    'Quan t’has sentit orgullós/a de com ho vas gestionar?',
+    'Què t’agradaria que jo entengués millor del que vius en línia?',
+    'Quina seria una petita acció que podríem provar aquesta setmana?',
   ];
-  const generationConfig = { temperature: 0.4, maxOutputTokens: 300 };
-  const resp = await postGemini({ contents, generationConfig });
-  const txt = textFromResponse(resp);
-  try {
-    const parsed = JSON.parse(txt);
-    if (parsed?.strengths && parsed?.suggestions && typeof parsed?.summary === 'string') {
-      return parsed as JournalFeedback;
-    }
-  } catch { /* ignore */ }
-  return { strengths: [], suggestions: [], summary: 'Gràcies per compartir. Continua reflexionant amb sinceritat.' };
 }

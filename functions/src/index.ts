@@ -14,6 +14,8 @@ export const ping = onRequest(
     res.status(200).json({ ok: true, msg: 'pong from europe-west1 v2' });
   }
 );
+export { seedDemoContent } from './seedDemo';
+
 
 // 1) Proxy segur per a Gemini
 export const geminiGenerate = onRequest(

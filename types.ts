@@ -155,3 +155,28 @@ export interface QuizQuestion {
   opcions: string[];
   resposta_correcta: string;
 }
+// types.ts (AFEGEIX AQUEST BLOC AL FINAL DEL FITXER)
+
+// ─────────────────────────────────────────────────────────────
+// Contingut educatiu “Guies visuals” (en codi, sense Firestore)
+// ─────────────────────────────────────────────────────────────
+export interface GuideMedia {
+  type: 'image' | 'video';
+  url: string;
+  alt?: string;
+}
+
+export interface GuideSection {
+  title: string;
+  body?: string;
+  bullets?: string[];
+  image?: GuideMedia;
+}
+
+export interface Guide {
+  id: string;
+  title: string;
+  summary: string;
+  hero?: GuideMedia;
+  sections: GuideSection[];
+}

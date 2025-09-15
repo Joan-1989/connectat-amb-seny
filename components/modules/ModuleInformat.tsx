@@ -1,132 +1,203 @@
 // components/modules/ModuleInformat.tsx
-import React, { useEffect, useState } from 'react';
-import type { Article, Myth } from '../../types';
-import { getArticles, getMyths } from '../../services/firestoreService';
+import React, { useMemo, useState } from 'react';
+// Contingut 100% de codi
+import { GUIDES } from '../../data/guides';
+import { SEED_ARTICLES, SEED_MYTHS } from '../../data/seedContent';
+
 import MythBadge from '../common/MythBadge';
+import HeroSlider from '../common/HeroSlider';
 
 export default function ModuleInformat(): React.ReactElement {
-  const [articles, setArticles] = useState<Article[]>([]);
-  const [myths, setMyths] = useState<Myth[]>([]);
-  const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
-  const [selectedMyth, setSelectedMyth] = useState<Myth | null>(null);
+  // Seleccions per a modals
+  const [selectedGuide, setSelectedGuide] = useState<(typeof GUIDES)[number] | null>(null);
+  const [selectedArticle, setSelectedArticle] = useState<(typeof SEED_ARTICLES)[number] | null>(null);
+  const [selectedMyth, setSelectedMyth] = useState<(typeof SEED_MYTHS)[number] | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const [a, m] = await Promise.all([getArticles(), getMyths()]);
-        setArticles(a);
-        setMyths(m);
-      } catch (e) {
-        console.error('Error carregant dades:', e);
-      }
-    })();
-  }, []);
-
-  // Helpers de presentació per al modal de mites
-  const mythLabels = (m: Myth) => {
-    if (m.isMyth === false) {
-      return {
-        line1Label: 'Afirmació:',
-        line2Label: 'Explicació:',
-      };
-    }
-    // Per defecte considerem que és mite
-    return {
-      line1Label: 'Afirmació incorrecta:',
-      line2Label: 'Realitat:',
-    };
-  };
+  // Slider hero (3 diapositives destacades)
+  const slides = useMemo(
+    () => [
+      {
+        title: 'Senyals d’alerta: què observar',
+        subtitle: 'Checklist per detectar problemes amb pantalles, joc, compres o xarxes.',
+        imageUrl: GUIDES.find(g => g.id === 'senyals-alerta')?.hero.url
+          ?? 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=1600&auto=format&fit=crop',
+        ctaLabel: 'Obrir guia',
+        onCta: () => setSelectedGuide(GUIDES.find(g => g.id === 'senyals-alerta') ?? null),
+      },
+      {
+        title: 'Eines ràpides d’autoregulació',
+        subtitle: 'Respiració 4–6, STOP, “si… aleshores…”, micro-hàbits.',
+        imageUrl: GUIDES.find(g => g.id === 'autoregulacio-eines')?.hero.url
+          ?? 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?q=80&w=1600&auto=format&fit=crop',
+        ctaLabel: 'Aprèn-les',
+        onCta: () => setSelectedGuide(GUIDES.find(g => g.id === 'autoregulacio-eines') ?? null),
+      },
+      {
+        title: 'Parlar-ne a casa (sense baralles)',
+        subtitle: 'Com obrir conversa, validar emocions i pactar límits realistes.',
+        imageUrl: GUIDES.find(g => g.id === 'parlar-a-casa')?.hero.url
+          ?? 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?q=80&w=1600&auto=format&fit=crop',
+        ctaLabel: 'Veure guia',
+        onCta: () => setSelectedGuide(GUIDES.find(g => g.id === 'parlar-a-casa') ?? null),
+      },
+    ],
+    []
+  );
 
   return (
-    <div className="animate-fade-in">
-      <h2 className="mb-6 text-2xl font-bold text-brand-dark">Informa&apos;t</h2>
+    <div className="animate-fade-in space-y-6">
+      <h2 className="text-2xl font-bold text-brand-dark">Informa&apos;t</h2>
 
-      {/* ARTICLES */}
-      <section className="mb-6 rounded-lg bg-white p-4 shadow-md">
-        <h3 className="mb-3 text-lg font-semibold text-brand-dark">Articles</h3>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {articles.map((a) => (
-            <article key={a.id} className="rounded-lg border p-3">
-              {a.mediaUrl && (
-                <div className="mb-2 overflow-hidden rounded-md">
-                  {/* imatge opcional si ve de Firestore */}
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={a.mediaUrl}
-                    alt={a.title}
-                    className="h-40 w-full object-cover"
-                  />
-                </div>
-              )}
-              <h4 className="font-semibold text-gray-900">{a.title}</h4>
-              {a.category && (
-                <span className="mt-1 inline-block rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700 ring-1 ring-blue-200">
-                  {a.category}
-                </span>
-              )}
-              <p className="mt-2 line-clamp-3 text-sm text-gray-700">
-                {a.summary || (a.content ? String(a.content).slice(0, 140) + '…' : '')}
-              </p>
+      {/* HERO */}
+      <HeroSlider slides={slides} />
 
-              <div className="mt-3">
+      {/* GUIES */}
+      <section className="rounded-lg bg-white p-4 shadow-md">
+        <h3 className="mb-2 text-lg font-semibold text-brand-dark">Guies pràctiques</h3>
+        <p className="mb-4 text-sm text-gray-600">
+          Materials curts, visuals i accionables per entendre i prevenir problemes.
+        </p>
+        <div className="grid gap-3 md:grid-cols-3">
+          {GUIDES.map(g => (
+            <article key={g.id} className="overflow-hidden rounded-lg border bg-white">
+              {g.hero?.type === 'image' && (
+                <img
+                  src={g.hero.url}
+                  alt={g.hero.alt ?? ''}
+                  className="h-36 w-full object-cover"
+                />
+              )}
+              <div className="p-3">
+                <h4 className="font-semibold">{g.title}</h4>
+                <p className="mt-1 line-clamp-3 text-sm text-gray-700">{g.summary}</p>
                 <button
                   type="button"
-                  onClick={() => setSelectedArticle(a)}
-                  className="w-full rounded-lg border px-3 py-2 text-left hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-primary"
-                  aria-label={`Llegir article: ${a.title}`}
+                  onClick={() => setSelectedGuide(g)}
+                  className="mt-3 w-full rounded-lg border px-3 py-2 text-left hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                  aria-label={`Obrir guia: ${g.title}`}
                 >
-                  Llegir article
+                  Obrir guia
                 </button>
               </div>
             </article>
           ))}
-          {articles.length === 0 && (
-            <p className="text-sm text-gray-500">Encara no hi ha articles.</p>
-          )}
+        </div>
+      </section>
+
+      {/* ARTICLES */}
+      <section className="rounded-lg bg-white p-4 shadow-md">
+        <h3 className="mb-2 text-lg font-semibold text-brand-dark">Articles</h3>
+        <p className="mb-4 text-sm text-gray-600">Idees clau, neuroeducació i plans pràctics.</p>
+        <div className="grid gap-3 md:grid-cols-2">
+          {SEED_ARTICLES.map(a => (
+            <article key={a.id} className="overflow-hidden rounded-lg border">
+              {a.mediaType === 'image' && a.mediaUrl && (
+                <img src={a.mediaUrl} alt="" className="h-40 w-full object-cover" />
+              )}
+              <div className="p-3">
+                <h4 className="font-semibold">{a.title}</h4>
+                <p className="mt-1 line-clamp-3 text-sm text-gray-700">{a.summary}</p>
+                <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
+                  <span>{a.category}</span>
+                  {a.mediaType === 'video' && <span>🎬 Vídeo</span>}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedArticle(a)}
+                  className="mt-3 w-full rounded-lg border px-3 py-2 text-left hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                  aria-label={`Llegir article: ${a.title}`}
+                >
+                  Llegir
+                </button>
+              </div>
+            </article>
+          ))}
         </div>
       </section>
 
       {/* MITES I REALITATS */}
       <section className="rounded-lg bg-white p-4 shadow-md">
-        <h3 className="mb-3 text-lg font-semibold text-brand-dark">Mites i Realitats</h3>
+        <h3 className="mb-2 text-lg font-semibold text-brand-dark">Mites i Realitats</h3>
         <div className="space-y-2">
-          {myths.map((m) => (
+          {SEED_MYTHS.map(m => (
             <div key={m.id} className="rounded-lg border p-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="font-medium text-gray-900">{m.title}</div>
+              <div className="flex items-center justify-between">
+                <div className="font-medium">{m.title}</div>
                 <MythBadge isMyth={m.isMyth} />
               </div>
               <button
                 type="button"
                 onClick={() => setSelectedMyth(m)}
                 className="mt-2 w-full rounded-lg border px-3 py-2 text-left hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-primary"
-                aria-label={`Obrir detall: ${m.title}`}
+                aria-label={`Obrir mite: ${m.title}`}
               >
                 Veure detall
               </button>
             </div>
           ))}
-          {myths.length === 0 && (
+          {SEED_MYTHS.length === 0 && (
             <p className="text-sm text-gray-500">Encara no hi ha mites.</p>
           )}
         </div>
       </section>
 
-      {/* ARTICLE MODAL */}
+      {/* ===== Modals ===== */}
+
+      {/* Guia */}
+      {selectedGuide && (
+        <div role="dialog" aria-modal="true" aria-labelledby="guide-title"
+             className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-3xl rounded-xl bg-white shadow-xl">
+            {selectedGuide.hero?.type === 'image' && (
+              <img
+                src={selectedGuide.hero.url}
+                alt={selectedGuide.hero.alt ?? ''}
+                className="h-48 w-full rounded-t-xl object-cover"
+              />
+            )}
+            <div className="p-6">
+              <div className="flex items-start justify-between gap-3">
+                <h3 id="guide-title" className="text-lg font-bold">
+                  {selectedGuide.title}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setSelectedGuide(null)}
+                  className="rounded bg-gray-100 px-2 py-1 text-sm hover:bg-gray-200"
+                  aria-label="Tancar"
+                >
+                  ✕
+                </button>
+              </div>
+              {selectedGuide.sections?.map((sec, idx) => (
+                <section key={idx} className="mt-3">
+                  {sec.title && <h4 className="font-semibold">{sec.title}</h4>}
+                  {sec.bullets && (
+                    <ul className="mt-1 list-disc pl-5 text-sm text-gray-800">
+                      {sec.bullets.map((b, i) => <li key={i}>{b}</li>)}
+                    </ul>
+                  )}
+                  {sec.image?.type === 'image' && sec.image.url && (
+                    <img
+                      src={sec.image.url}
+                      alt={sec.image.alt ?? ''}
+                      className="mt-2 rounded-lg border"
+                    />
+                  )}
+                </section>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Article */}
       {selectedArticle && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="article-modal-title"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          onClick={() => setSelectedArticle(null)}
-        >
-          <div
-            className="w-full max-w-2xl rounded-xl bg-white p-6 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div role="dialog" aria-modal="true" aria-labelledby="article-title"
+             className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-2xl rounded-xl bg-white p-6 shadow-xl">
             <div className="flex items-center justify-between">
-              <h3 id="article-modal-title" className="text-lg font-bold">
+              <h3 id="article-title" className="text-lg font-bold">
                 {selectedArticle.title}
               </h3>
               <button
@@ -139,41 +210,42 @@ export default function ModuleInformat(): React.ReactElement {
               </button>
             </div>
 
-            {selectedArticle.mediaUrl && (
-              <div className="mt-3 overflow-hidden rounded-md">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+            {selectedArticle.mediaType === 'video' && selectedArticle.mediaUrl ? (
+              <div className="mt-3 aspect-video w-full overflow-hidden rounded-lg border">
+                <iframe
+                  title={selectedArticle.title}
                   src={selectedArticle.mediaUrl}
-                  alt={selectedArticle.title}
-                  className="max-h-72 w-full object-cover"
+                  className="h-full w-full"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
                 />
               </div>
+            ) : (
+              selectedArticle.mediaType === 'image' &&
+              selectedArticle.mediaUrl && (
+                <img
+                  src={selectedArticle.mediaUrl}
+                  alt=""
+                  className="mt-3 max-h-64 w-full rounded-lg object-cover"
+                />
+              )
             )}
 
             <div className="mt-3 whitespace-pre-wrap text-sm text-gray-800">
-              {selectedArticle.content ?? selectedArticle.summary ?? '—'}
+              {selectedArticle.content ?? selectedArticle.summary}
             </div>
           </div>
         </div>
       )}
 
-      {/* MYTH MODAL */}
+      {/* Mite */}
       {selectedMyth && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="myth-modal-title"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          onClick={() => setSelectedMyth(null)}
-        >
-          <div
-            className="w-full max-w-xl rounded-xl bg-white p-6 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div role="dialog" aria-modal="true" aria-labelledby="myth-title"
+             className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-xl rounded-xl bg-white p-6 shadow-xl">
             <div className="flex items-center justify-between">
-              <h3 id="myth-modal-title" className="flex items-center gap-2 text-lg font-bold">
+              <h3 id="myth-title" className="text-lg font-bold">
                 {selectedMyth.title}
-                <MythBadge isMyth={selectedMyth.isMyth} />
               </h3>
               <button
                 type="button"
@@ -184,16 +256,9 @@ export default function ModuleInformat(): React.ReactElement {
                 ✕
               </button>
             </div>
-
             <div className="mt-3 space-y-2 text-sm">
-              <p>
-                <strong>{mythLabels(selectedMyth).line1Label}</strong>{' '}
-                {selectedMyth.myth}
-              </p>
-              <p>
-                <strong>{mythLabels(selectedMyth).line2Label}</strong>{' '}
-                {selectedMyth.reality}
-              </p>
+              <p><strong>Afirmació:</strong> {selectedMyth.myth}</p>
+              <p className="rounded-md bg-emerald-50 p-2"><strong>Realitat:</strong> {selectedMyth.reality}</p>
             </div>
           </div>
         </div>
